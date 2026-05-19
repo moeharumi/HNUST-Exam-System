@@ -232,6 +232,7 @@ class SelectPage(QWidget):
         self._py_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._py_btn.setCheckable(True)
         self._py_btn.clicked.connect(lambda: self._on_category_click("Python"))
+        self._py_btn.installEventFilter(self)
         self._style_category_card(self._py_btn, c)
         card_container.addWidget(self._py_btn)
 
@@ -240,6 +241,7 @@ class SelectPage(QWidget):
         self._c_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._c_btn.setCheckable(True)
         self._c_btn.clicked.connect(lambda: self._on_category_click("C语言"))
+        self._c_btn.installEventFilter(self)
         self._style_category_card(self._c_btn, c)
         card_container.addWidget(self._c_btn)
 
@@ -442,6 +444,17 @@ class SelectPage(QWidget):
     #  键盘事件过滤
     # ================================================================
     def eventFilter(self, obj, event):
+        if event.type() == event.Type.MouseButtonDblClick:
+            if obj is self._py_btn:
+                self._on_category_click("Python")
+                if self._confirm_btn.isEnabled():
+                    self._on_confirm_category()
+                return True
+            if obj is self._c_btn:
+                self._on_category_click("C语言")
+                if self._confirm_btn.isEnabled():
+                    self._on_confirm_category()
+                return True
         if obj is self._list_widget:
             if event.type() == event.Type.KeyPress:
                 if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
