@@ -520,8 +520,9 @@ class ExamPage(QWidget):
                 themed_critical(self, "错误", f"找不到程序文件：{program_file}")
                 return
 
-        # 根据题目语言选择打开方式
-        if q.language == "c":
+        # 根据题目语言或文件扩展名选择打开方式
+        is_c = q.language == "c" or program_file.lower().endswith(".c")
+        if is_c:
             self._open_c_file(program_path, program_file)
         else:
             self._open_py_file(program_path, program_file)
