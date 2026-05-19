@@ -213,3 +213,74 @@ def open_with_idle(file_path: str, python_exe: str | None = None) -> bool:
                 pass
 
     return False
+
+
+def find_vc_express() -> str | None:
+    """查找 Microsoft Visual C++ 2010 Express 路径."""
+    candidates = [
+        r"C:\Program Files (x86)\Microsoft Visual Studio 10.0\Common7\IDE\VCExpress.exe",
+        r"C:\Program Files\Microsoft Visual Studio 10.0\Common7\IDE\VCExpress.exe",
+    ]
+    for path in candidates:
+        if os.path.isfile(path):
+            return path
+    return None
+
+
+def find_vscode() -> str | None:
+    """查找 VS Code 可执行文件路径."""
+    # 优先 PATH 中的 code
+    code = shutil.which("code")
+    if code:
+        return code
+    # 常见安装路径
+    local_app = os.environ.get("LOCALAPPDATA", "")
+    program_files = os.environ.get("ProgramFiles", "C:\\Program Files")
+    candidates = [
+        os.path.join(local_app, "Programs", "Microsoft VS Code", "Code.exe"),
+        os.path.join(program_files, "Microsoft VS Code", "Code.exe"),
+        os.path.join(program_files, "Microsoft VS Code", "bin", "code.cmd"),
+    ]
+    for path in candidates:
+        if os.path.isfile(path):
+            return path
+    return None
+
+
+def open_c_file(file_path: str) -> str | None:
+    """打开 .c 文件，按优先级：VC++ 2010 Express → VS Code → 系统默认.
+
+    Returns
+    -------
+        成功返回描述文字（用于提示框），失败返回 None.
+    """
+    abs_path = os.path.abspath(file_path)
+    NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
+    # 1. Microsoft Visual C++ 2010 Express
+    vc = find_vc_express()
+    if vc:
+        try:
+            subprocess.Popen([vc, abs_path], creationflags=NO_WINDOW)
+            return "Microsoft Visual C++ 2010 Express"
+        except Exception:
+            pass
+
+    # 2. VS Code
+    vscode = find_vscode()
+    if vscode:
+        try:
+            subprocess.Popen([vscode, abs_path], creationflags=NO_WINDOW)
+            return "Visual Studio Code"
+        except Exception:
+            pass
+
+    # 3. 系统默认
+    try:
+        if os.name == "nt":
+            os.startfile(abs_path)
+        else:
+            subprocess.run(["xdg-open", abs_path], check=True)
+        return "系统默认程序"
+    except Exception:
+        return None

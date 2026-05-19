@@ -493,7 +493,7 @@ class ExamPage(QWidget):
         self.nav_panel.refresh()
 
     def open_program_file(self) -> None:
-        """打开程序文件（用IDLE）."""
+        """打开程序文件（.py用IDLE，.c用VC++/VS Code）. """
         if not self.exam:
             return
         q = self.exam.get_question(self.exam.current_index)
@@ -520,25 +520,45 @@ class ExamPage(QWidget):
                 themed_critical(self, "错误", f"找不到程序文件：{program_file}")
                 return
 
+        # 根据题目语言选择打开方式
+        if q.language == "c":
+            self._open_c_file(program_path, program_file)
+        else:
+            self._open_py_file(program_path, program_file)
+
+    def _open_py_file(self, program_path: str, display_name: str) -> None:
+        """用 IDLE 打开 .py 文件，失败则回退系统默认."""
         from hnust_exam.services.python_env import open_with_idle
-        from hnust_exam.utils.constants import CURRENT_VERSION
         cfg = self.main_window.config_mgr.load_config()
         python_path = cfg.get("user_python_path", "")
 
         success = open_with_idle(program_path, python_path or None)
         if success:
-            themed_info(self, "提示", f"已用IDLE打开：{program_file}\n修改完成后按Ctrl+S保存，然后回到本系统输入答案")
+            themed_info(self, "提示",
+                        f"已用IDLE打开：{display_name}\n"
+                        "修改完成后按Ctrl+S保存，然后回到本系统输入答案")
         else:
-            # 回退到系统默认程序
             import subprocess
             try:
                 if os.name == "nt":
                     os.startfile(program_path)
                 else:
                     subprocess.run(["xdg-open", program_path], check=True)
-                themed_info(self, "提示", f"已用默认程序打开：{program_file}\n（未检测到Python IDLE）")
+                themed_info(self, "提示",
+                            f"已用默认程序打开：{display_name}\n（未检测到Python IDLE）")
             except Exception as e:
                 themed_critical(self, "错误", f"打开文件失败：{e}")
+
+    def _open_c_file(self, program_path: str, display_name: str) -> None:
+        """用 VC++ 2010 Express / VS Code 打开 .c 文件."""
+        from hnust_exam.services.python_env import open_c_file
+        opener_name = open_c_file(program_path)
+        if opener_name:
+            themed_info(self, "提示",
+                        f"已用{opener_name}打开：{display_name}\n"
+                        "修改完成后按Ctrl+S保存，然后回到本系统输入答案")
+        else:
+            themed_critical(self, "错误", f"打开文件失败，未找到合适的C语言编辑器")
 
     def open_exam_folder(self) -> None:
         exam_dir = os.path.dirname(self.exam_file_path)
