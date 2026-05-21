@@ -7,7 +7,7 @@ import time
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QFont, QMouseEvent
+from PySide6.QtGui import QFont, QMouseEvent, QPixmap
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 
 from hnust_exam.models.exam import Exam
 from hnust_exam.utils.theme import Theme
+from hnust_exam.utils.helpers import get_resource_path
 from hnust_exam.utils.ui_helpers import themed_warning, themed_critical
 from hnust_exam.views.animated_card_delegate import AnimatedCardDelegate
 
@@ -112,12 +113,31 @@ class _ToggleListWidget(QListWidget):
 
     # ─── 点击取消选择 ───
     def mousePressEvent(self, e: QMouseEvent):
+        # 记录按下的行，给委托绘制按压反馈
         item = self.itemAt(e.pos())
+        if item:
+            delegate = self.itemDelegate()
+            if hasattr(delegate, 'pressed_row'):
+                delegate.pressed_row = self.row(item)
+                self.update(self.visualItemRect(item))
+
         if item and item.isSelected():
             self._deselect_timer.start()
         else:
             self._deselect_timer.stop()
         super().mousePressEvent(e)
+
+    def mouseReleaseEvent(self, e: QMouseEvent):
+        """释放鼠标时清除按压状态"""
+        delegate = self.itemDelegate()
+        if hasattr(delegate, 'pressed_row'):
+            old_row = delegate.pressed_row
+            delegate.pressed_row = -1
+            if old_row >= 0:
+                item = self.item(old_row)
+                if item:
+                    self.update(self.visualItemRect(item))
+        super().mouseReleaseEvent(e)
 
     def _do_deselect(self):
         self.clearSelection()
@@ -166,6 +186,16 @@ class SelectPage(QWidget):
         self._back_btn.clicked.connect(self._on_back)
         self._back_btn.setVisible(False)
         header_layout.addWidget(self._back_btn)
+
+        # Logo
+        logo_label = QLabel()
+        logo_pixmap = QPixmap(get_resource_path("hnust_exam/resources/logo.png"))
+        if not logo_pixmap.isNull():
+            logo_label.setPixmap(
+                logo_pixmap.scaled(32, 32, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            )
+            logo_label.setStyleSheet("padding-right: 6px;")
+        header_layout.addWidget(logo_label)
 
         title = QLabel("HNUST仿真平台")
         title.setStyleSheet("color: white; font-size: 16pt; font-weight: bold;")

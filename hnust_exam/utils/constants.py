@@ -2,7 +2,7 @@
 
 import os
 
-CURRENT_VERSION = "v1.1.3"
+CURRENT_VERSION = "v1.1.4"
 GITHUB_USERNAME = "RyanTanC"
 GITHUB_REPO_NAME = "HNUST-Exam-System"
 

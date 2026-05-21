@@ -1,6 +1,5 @@
-"""抗锯齿文字 + 选中卡片弹性弹出动画的自定义代理."""
+"""抗锯齿文字 + 选中卡片平滑弹出动画的自定义代理（含按压反馈）."""
 
-import math
 import time
 
 from PySide6.QtCore import Qt, QSize, QRectF, QTimer
@@ -9,9 +8,9 @@ from PySide6.QtWidgets import QStyledItemDelegate, QStyle
 
 
 class AnimatedCardDelegate(QStyledItemDelegate):
-    """抗锯齿文字 + 选中卡片弹性弹出动画"""
+    """抗锯齿文字 + 选中卡片平滑弹出动画（含按压反馈）"""
 
-    DURATION = 0.38
+    DURATION = 0.28
     NORMAL_PAD_V = 4
     NORMAL_PAD_H = 16
     SELECTED_PAD_V = 2
@@ -26,18 +25,20 @@ class AnimatedCardDelegate(QStyledItemDelegate):
         self._progress: dict = {}       # row → 0.0~1.0
         self._t0: dict = {}             # row → 动画起始时间戳
         self._active: set = set()       # 正在动画的行
-
         self._timer = QTimer(self)
         self._timer.setInterval(16)     # ≈60 fps
         self._timer.timeout.connect(self._tick)
 
+        # 公开属性 — _ToggleListWidget 在鼠标按下时设置
+        self.pressed_row = -1
+
     # ──────────────── 公开接口 ────────────────
 
     def animateTo(self, new_row: int, old_row: int = -1):
-        """选择变化时调用，触发动画"""
+        """选择变化时触发动画（按压反馈由 pressed_row 叠加层负责，动画从 0 起步避免布局跳变）"""
         now = time.time()
         if new_row >= 0:
-            self._progress[new_row] = self._progress.get(new_row, 0.0)
+            self._progress[new_row] = 0.0
             self._t0[new_row] = now
             self._active.add(new_row)
         if old_row >= 0 and old_row != new_row:
@@ -46,6 +47,10 @@ class AnimatedCardDelegate(QStyledItemDelegate):
             self._active.add(old_row)
         if self._active and not self._timer.isActive():
             self._timer.start()
+        # 立即触发布局同步，防止 sizeHint 已变而 layout 未更新的跳帧
+        view = self.parent()
+        if view:
+            view.scheduleDelayedItemsLayout()
 
     # ──────────────── 动画引擎 ────────────────
 
@@ -56,14 +61,17 @@ class AnimatedCardDelegate(QStyledItemDelegate):
 
         for row in self._active:
             t = min((now - self._t0.get(row, now)) / self.DURATION, 1.0)
-            eased = self._elastic_out(t)
+            eased = self._back_ease_out(t)
 
             is_sel = False
             if view and view.model() and view.selectionModel():
                 is_sel = view.selectionModel().isSelected(
                     view.model().index(row, 0)
                 )
-            self._progress[row] = eased if is_sel else 1.0 - eased
+            if is_sel:
+                self._progress[row] = eased
+            else:
+                self._progress[row] = 1.0 - eased
 
             if t >= 1.0:
                 done.add(row)
@@ -78,25 +86,25 @@ class AnimatedCardDelegate(QStyledItemDelegate):
             self._timer.stop()
 
     @staticmethod
-    def _elastic_out(t: float) -> float:
-        """弹性缓出 — 先冲过头再弹回来"""
+    def _back_ease_out(t: float) -> float:
+        """Back ease out — 先略微过冲再回弹，比弹性缓出更细腻"""
         if t <= 0.0:
             return 0.0
         if t >= 1.0:
             return 1.0
-        p = 0.35
-        s = p / 4.0
-        return pow(2, -10 * t) * math.sin((t - s) * 2 * math.pi / p) + 1.0
+        s = 1.70158
+        t2 = t - 1
+        return t2 * t2 * ((s + 1) * t2 + s) + 1.0
 
     # ──────────────── 尺寸 & 绘制 ────────────────
 
     def sizeHint(self, option, index):
-        """选中条目随动画增大行高，推开相邻卡片"""
+        """选中条目随动画增大行高，推开相邻卡片（p 钳位到 [0,1]，防止抖动）"""
         base = super().sizeHint(option, index)
         fm = QFontMetrics(option.font)
         h = base.height() if base.height() > 0 else fm.height()
         row = index.row()
-        p = self._progress.get(row, 0.0)
+        p = max(0.0, min(self._progress.get(row, 0.0), 1.0))
         # 动态高度：选中时多出 EXPAND_HEIGHT * p
         extra = self.EXPAND_HEIGHT * p
         return QSize(
@@ -118,6 +126,9 @@ class AnimatedCardDelegate(QStyledItemDelegate):
 
         if selected and p < 1.0 and row not in self._active:
             p = 1.0
+
+        # 点击按压标识
+        is_pressed = (self.pressed_row >= 0 and row == self.pressed_row)
 
         # ---- 计算卡片矩形 ----
         full = QRectF(option.rect).adjusted(
@@ -153,6 +164,14 @@ class AnimatedCardDelegate(QStyledItemDelegate):
             painter.setBrush(QColor(self._c['WHITE']))
 
         painter.drawRoundedRect(card, 10, 10)
+
+        # ---- 点击按压叠加层（瞬间反馈） ----
+        if is_pressed:
+            overlay = QColor(self._c['PRIMARY'])
+            overlay.setAlpha(25)
+            painter.setBrush(overlay)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.drawRoundedRect(card, 10, 10)
 
         # ---- 左侧彩色竖条 ----
         if p > 0.01:

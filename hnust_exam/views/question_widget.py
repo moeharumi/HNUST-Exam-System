@@ -86,7 +86,7 @@ class QuestionWidget(QWidget):
         self._question_text.setWordWrap(True)
         self._question_text.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         self._question_text.setStyleSheet(
-            f"color: {c['TEXT']}; font-size: 15pt; font-weight: 500; padding: 10px 0;"
+            f"color: {c['TEXT']}; font-size: 13pt; font-weight: 500; padding: 10px 0;"
         )
         self._content_layout.addWidget(self._question_text)
 
@@ -156,7 +156,7 @@ class QuestionWidget(QWidget):
             f"color: {c['TEXT']}; font-size: 9pt; padding: 5px 0 10px 0;"
         )
         self._question_text.setStyleSheet(
-            f"color: {c['TEXT']}; font-size: 15pt; font-weight: 500; padding: 10px 0;"
+            f"color: {c['TEXT']}; font-size: 13pt; font-weight: 500; padding: 10px 0;"
         )
         self._hint_label.setStyleSheet(
             f"background-color: {c['HINT_BG']}; color: {c['HINT_TEXT']}; "
@@ -526,7 +526,7 @@ class QuestionWidget(QWidget):
         ans_text = QLabel(q.correct_answer)
         ans_text.setWordWrap(True)
         ans_text.setStyleSheet(
-            f"color: {c['SUCCESS']}; font-size: 17pt; font-weight: bold; "
+            f"color: {c['SUCCESS']}; font-size: 16pt; font-weight: bold; "
             f"font-family: Consolas; border: none;"
         )
         ans_layout.addWidget(ans_text)

@@ -4,24 +4,140 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, QRectF, QSize, Signal
+from PySide6.QtGui import (
+    QPixmap,
+    QPainter,
+    QPainterPath,
+    QFont,
+    QFontMetrics,
+    QColor,
+    QPen,
+)
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
     QLabel,
     QPushButton,
-    QCheckBox,
     QScrollArea,
     QFrame,
 )
 
 from hnust_exam.utils.constants import CURRENT_VERSION
 from hnust_exam.utils.theme import Theme
+from hnust_exam.utils.helpers import get_resource_path
 from hnust_exam.utils.ui_helpers import themed_warning
 
 if TYPE_CHECKING:
     from hnust_exam.views.main_window import MainWindow
+
+
+class AnimatedCheckBox(QWidget):
+    """自定义复选框 —— 打勾路径动画，不受原生样式裁剪影响."""
+
+    toggled = Signal(bool)
+    BOX_SZ = 20
+    DURATION = 0.25
+
+    def __init__(self, text: str = "", parent: QWidget | None = None):
+        super().__init__(parent)
+        self._text = text
+        self._checked = False
+        self._prog = 0.0       # 0~1 动画进度
+        self._dir = 1           # 1=勾选  -1=取消
+
+        self._timer = QTimer(self)
+        self._timer.setInterval(16)
+        self._timer.timeout.connect(self._tick)
+
+        fm = QFontMetrics(QFont("Microsoft YaHei", 13))
+        self._text_w = fm.horizontalAdvance(text)
+
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+    def isChecked(self) -> bool:
+        return self._checked
+
+    def setChecked(self, checked: bool) -> None:
+        if checked == self._checked:
+            return
+        self._checked = checked
+        self._dir = 1 if checked else -1
+        if not self._timer.isActive():
+            self._timer.start()
+
+    # ── 动画 ──
+
+    def _tick(self) -> None:
+        step = 1.0 / (self.DURATION / 0.016)
+        self._prog = max(0.0, min(self._prog + step * self._dir, 1.0))
+        self.update()
+        if self._prog <= 0.0 or self._prog >= 1.0:
+            self._timer.stop()
+
+    # ── 尺寸 ──
+
+    def sizeHint(self) -> QSize:
+        return QSize(self.BOX_SZ + 10 + self._text_w + 8,
+                     max(self.BOX_SZ, QFontMetrics(QFont("Microsoft YaHei", 13)).height()) + 12)
+
+    # ── 事件 ──
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.setChecked(not self._checked)
+            self.toggled.emit(self._checked)
+            event.accept()
+        else:
+            super().mousePressEvent(event)
+
+    # ── 绘制 ──
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        c = Theme.get_current_colors()
+        cy = self.height() / 2.0
+        box = QRectF(0, cy - self.BOX_SZ / 2.0, self.BOX_SZ, self.BOX_SZ)
+
+        # 方框背景
+        if self._prog > 0:
+            fill = QColor(c['PRIMARY'])
+            fill.setAlpha(int(255 * self._prog))
+            painter.setBrush(fill)
+        else:
+            painter.setBrush(QColor(c['WHITE']))
+
+        painter.setPen(QPen(QColor(c['BORDER']), 1.5))
+        painter.drawRoundedRect(box, 4, 4)
+
+        # 打勾路径动画（逐笔绘制）
+        if self._prog > 0:
+            inner = box.adjusted(4, 4, -4, -4)
+            path = QPainterPath()
+            path.moveTo(inner.left(), inner.center().y() + 1)
+            path.lineTo(inner.left() + inner.width() * 0.35, inner.bottom())
+            path.lineTo(inner.right(), inner.top())
+
+            pen = QPen(QColor(c['WHITE']), 2.5,
+                       Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
+            total = path.length()
+            if total > 0 and self._prog < 1.0:
+                pen.setDashPattern([total * self._prog, total])
+            painter.setPen(pen)
+            painter.drawPath(path)
+
+        # 文字
+        tr = QRectF(self.BOX_SZ + 10, 0,
+                     self.width() - self.BOX_SZ - 10, self.height())
+        font = QFont("Microsoft YaHei", 13)
+        font.setBold(True)
+        painter.setFont(font)
+        painter.setPen(QColor(c['TEXT']))
+        painter.drawText(tr, Qt.AlignmentFlag.AlignVCenter
+                         | Qt.TextFlag.TextSingleLine, self._text)
 
 
 class WelcomePage(QWidget):
@@ -47,6 +163,15 @@ class WelcomePage(QWidget):
             f"background-color: {c['PRIMARY']}; padding: 6px 30px;"
         )
         header_layout = QHBoxLayout(header)
+        # Logo
+        logo_label = QLabel()
+        logo_pixmap = QPixmap(get_resource_path("hnust_exam/resources/logo.png"))
+        if not logo_pixmap.isNull():
+            logo_label.setPixmap(
+                logo_pixmap.scaled(32, 32, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            )
+            logo_label.setStyleSheet("padding-right: 6px;")
+        header_layout.addWidget(logo_label)
         title_label = QLabel("HNUST仿真平台")
         title_label.setStyleSheet(
             f"color: white; font-size: 16pt; font-weight: bold;"
@@ -153,10 +278,7 @@ class WelcomePage(QWidget):
         bottom_layout = QHBoxLayout(bottom_frame)
         bottom_layout.setContentsMargins(40, 10, 40, 20)
 
-        self.agree_check = QCheckBox("我已阅读并同意以上所有条款")
-        self.agree_check.setStyleSheet(
-            f"color: {c['TEXT']}; font-size: 13pt; font-weight: bold;"
-        )
+        self.agree_check = AnimatedCheckBox("我已阅读并同意以上所有条款")
         bottom_layout.addWidget(self.agree_check)
 
         self.enter_btn = QPushButton("进入系统（请等待 10 秒）")

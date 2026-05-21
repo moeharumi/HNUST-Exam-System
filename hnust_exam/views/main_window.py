@@ -64,7 +64,7 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.result_page)     # index 3
 
         # 水印标签
-        self._watermark_left = QLabel("HNUST Exam · Free · 禁止售卖")
+        self._watermark_left = QLabel("HNUST Exam · Free · 禁止售卖 · Made BY RyanTanC")
         self._watermark_left.setStyleSheet(
             f"color: {Theme.MUTED}; font-size: 7pt; padding: 2px;"
         )

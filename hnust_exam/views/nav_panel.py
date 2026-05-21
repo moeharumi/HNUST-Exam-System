@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve, Property, QTimer
+from PySide6.QtCore import Qt, QPoint, QPropertyAnimation, QEasingCurve, Property, QTimer
 from PySide6.QtGui import QPainter, QPen, QColor
 from PySide6.QtWidgets import (
     QScroller,
@@ -165,13 +165,13 @@ class NavPanel(QWidget):
         frame_layout.addWidget(self._sep)
 
         # 可滚动区域
-        scroll_area = SmoothScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setHorizontalScrollBarPolicy(
+        self._scroll_area = SmoothScrollArea()
+        self._scroll_area.setWidgetResizable(True)
+        self._scroll_area.setHorizontalScrollBarPolicy(
             Qt.ScrollBarPolicy.ScrollBarAlwaysOff,
         )
         QScroller.grabGesture(
-            scroll_area.viewport(),
+            self._scroll_area.viewport(),
             QScroller.ScrollerGestureType.TouchGesture,
         )
 
@@ -182,8 +182,8 @@ class NavPanel(QWidget):
         self._nav_layout.setSpacing(0)
         self._nav_layout.addStretch()
 
-        scroll_area.setWidget(self._nav_content)
-        frame_layout.addWidget(scroll_area, 1)
+        self._scroll_area.setWidget(self._nav_content)
+        frame_layout.addWidget(self._scroll_area, 1)
 
         # 底部状态
         self._status_label = QLabel("")
@@ -303,6 +303,16 @@ class NavPanel(QWidget):
         )
 
         self.exam_page._update_progress()
+
+        # 自动展开当前题型分组（如果折叠）
+        if exam and exam.questions:
+            q = exam.questions[exam.current_index]
+            panel = self._panels.get(q.q_type)
+            if panel and not panel["body"].isVisible() and not self._animating:
+                self._expand_group(panel["body"], panel["arrow"])
+
+        # 自动滚动到当前题目
+        self._scroll_to_current()
 
     # ── 面板构建 ──────────────────────────────────────────────
 
@@ -600,3 +610,53 @@ class NavPanel(QWidget):
             self._running_anims.remove(anim)
         except ValueError:
             pass
+
+    # ── 自动滚动 ──────────────────────────────────────────────
+
+    def _scroll_to_current(self) -> None:
+        """智能滚动到当前题目按钮刚好可见."""
+        exam = self.exam_page.exam
+        if not exam or not self._q_buttons:
+            return
+
+        btn = self._q_buttons.get(exam.current_index)
+        if not btn:
+            return
+
+        sb = self._scroll_area.verticalScrollBar()
+        viewport = self._scroll_area.viewport()
+        margin = 15
+
+        # 按钮相对 viewport 的位置
+        btn_global = btn.mapToGlobal(QPoint(0, 0))
+        vp_global = viewport.mapToGlobal(QPoint(0, 0))
+        rel_y = btn_global.y() - vp_global.y()
+        btn_h = btn.height()
+
+        total = exam.total_count
+        cur = exam.current_index
+
+        if cur == 0:
+            target = sb.minimum()
+        elif cur == total - 1:
+            target = sb.maximum()
+        elif rel_y + btn_h > viewport.height() - margin:
+            over = rel_y + btn_h - viewport.height() + margin
+            target = sb.value() + over
+        elif rel_y < margin:
+            target = sb.value() + rel_y - margin
+        else:
+            return
+
+        self._smooth_scroll_to(target)
+
+    def _smooth_scroll_to(self, target: int) -> None:
+        """复用 SmoothScrollArea 的动画做平滑滚动."""
+        target = max(self._scroll_area.verticalScrollBar().minimum(),
+                     min(target, self._scroll_area.verticalScrollBar().maximum()))
+        sb = self._scroll_area.verticalScrollBar()
+        anim = self._scroll_area._anim
+        anim.stop()
+        anim.setStartValue(sb.value())
+        anim.setEndValue(int(target))
+        anim.start()

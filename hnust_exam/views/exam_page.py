@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QWidget,
@@ -25,6 +26,7 @@ from hnust_exam.models.result import Result
 from hnust_exam.services.backup_manager import BackupManager
 from hnust_exam.utils.constants import EXAM_TIME_SECONDS
 from hnust_exam.utils.theme import Theme
+from hnust_exam.utils.helpers import get_resource_path
 from hnust_exam.utils.ui_helpers import themed_question, themed_info, themed_critical
 
 from hnust_exam.services.telemetry import send_submit_score
@@ -71,6 +73,16 @@ class ExamPage(QWidget):
             f"background-color: {c['PRIMARY']}; padding: 8px 15px;"
         )
         top_layout = QHBoxLayout(self._top_bar)
+
+        # Logo
+        logo_label = QLabel()
+        logo_pixmap = QPixmap(get_resource_path("hnust_exam/resources/logo.png"))
+        if not logo_pixmap.isNull():
+            logo_label.setPixmap(
+                logo_pixmap.scaled(28, 28, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            )
+            logo_label.setStyleSheet("padding-right: 5px;")
+        top_layout.addWidget(logo_label)
 
         left_info = QLabel("HNUST仿真平台")
         left_info.setStyleSheet("color: white; font-size: 12pt; font-weight: bold;")
