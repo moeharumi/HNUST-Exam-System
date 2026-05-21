@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import Qt
@@ -75,9 +76,7 @@ class ReviewDialog(QDialog):
         content_layout.addWidget(q_text)
 
         # 图片（如果题目有）
-        import os
-        from hnust_exam.utils.constants import IMAGES_DIR
-        from hnust_exam.utils.helpers import get_resource_path
+        from hnust_exam.utils.helpers import get_question_bank_subdir
 
         if self._exam:
             match_q = None
@@ -90,16 +89,16 @@ class ReviewDialog(QDialog):
                 if available_w < 200:
                     available_w = 400
 
-                img_dir = get_resource_path(IMAGES_DIR)
-                if not os.path.isdir(img_dir):
-                    img_dir = os.path.join(os.getcwd(), IMAGES_DIR)
+                img_dir = get_question_bank_subdir("试题图片")
 
                 for ref, filename in match_q.images.items():
                     img_path = os.path.join(img_dir, filename)
                     if not os.path.isfile(img_path):
-                        img_path = os.path.join(os.getcwd(), IMAGES_DIR, filename)
-
-                    if os.path.isfile(img_path):
+                        el = QLabel(f"[未找到图片：{filename}]")
+                        el.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                        el.setStyleSheet(f"color: {c['MUTED']}; font-size: 10pt; padding: 6px;")
+                        content_layout.addWidget(el)
+                    else:
                         pixmap = QPixmap(img_path)
                         if not pixmap.isNull():
                             scaled = pixmap.scaled(
@@ -117,11 +116,6 @@ class ReviewDialog(QDialog):
                             el.setAlignment(Qt.AlignmentFlag.AlignCenter)
                             el.setStyleSheet(f"color: {c['MUTED']}; font-size: 10pt; padding: 6px;")
                             content_layout.addWidget(el)
-                    else:
-                        el = QLabel(f"[未找到图片：{filename}]")
-                        el.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                        el.setStyleSheet(f"color: {c['MUTED']}; font-size: 10pt; padding: 6px;")
-                        content_layout.addWidget(el)
 
                     cap = QLabel(ref)
                     cap.setAlignment(Qt.AlignmentFlag.AlignCenter)

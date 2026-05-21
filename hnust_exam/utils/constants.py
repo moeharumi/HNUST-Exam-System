@@ -12,6 +12,11 @@ PROGRESS_FILE = os.path.join(_CONFIG_DIR, "progress.json")
 SKIP_VERSION_FILE = os.path.join(_CONFIG_DIR, "skip_ver")
 TELEMETRY_QUEUE_FILE = os.path.join(_CONFIG_DIR, "telemetry_queue.json")
 
+# 用户本地题库缓存目录（持久化，断网可用）
+QUESTION_BANK_DIR = os.path.join(_CONFIG_DIR, "question_bank")
+QUESTION_BANK_FILES_DIR = os.path.join(QUESTION_BANK_DIR, "files")
+MANIFEST_FILE = os.path.join(QUESTION_BANK_DIR, "manifest.json")
+
 QUESTION_TYPE_ORDER = ["单选", "填空", "判断", "程序填空", "程序改错", "程序设计"]
 PROGRAM_TYPES = {"程序设计", "程序填空", "程序改错"}
 

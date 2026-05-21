@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import Qt, Signal
@@ -358,46 +359,34 @@ class QuestionWidget(QWidget):
 
     def _populate_images(self, q: Question, c: dict) -> None:
         """在图片区域填充题目图片和图注."""
-        import os
-        from hnust_exam.utils.constants import IMAGES_DIR
-        from hnust_exam.utils.helpers import get_resource_path
+        from hnust_exam.utils.helpers import get_question_bank_subdir
 
         # 计算可用宽度（内容区宽度 - 左右边距）
         available_width = self._content.width() - 40
         if available_width < 200:
             available_width = 500  # fallback（布局尚未完成时）
 
-        # 查找图片目录
-        img_dir = get_resource_path(IMAGES_DIR)
-        if not os.path.isdir(img_dir):
-            img_dir = os.path.join(os.getcwd(), IMAGES_DIR)
+        img_dir = get_question_bank_subdir("试题图片")
 
         for ref, filename in q.images.items():
-            # 尝试多个路径定位图片
             img_path = os.path.join(img_dir, filename)
             if not os.path.isfile(img_path):
-                img_path = os.path.join(os.getcwd(), IMAGES_DIR, filename)
+                continue
 
-            if os.path.isfile(img_path):
-                pixmap = QPixmap(img_path)
-                if not pixmap.isNull():
-                    scaled = pixmap.scaled(
-                        available_width, 4096,
-                        Qt.AspectRatioMode.KeepAspectRatio,
-                        Qt.TransformationMode.SmoothTransformation,
-                    )
-                    img_label = QLabel()
-                    img_label.setPixmap(scaled)
-                    img_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                    img_label.setMaximumWidth(available_width)
-                    self._images_layout.addWidget(img_label)
-                else:
-                    err = QLabel(f"[图片格式无法识别：{filename}]")
-                    err.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                    err.setStyleSheet(f"color: {c['MUTED']}; font-size: 10pt; padding: 6px;")
-                    self._images_layout.addWidget(err)
+            pixmap = QPixmap(img_path)
+            if not pixmap.isNull():
+                scaled = pixmap.scaled(
+                    available_width, 4096,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
+                img_label = QLabel()
+                img_label.setPixmap(scaled)
+                img_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                img_label.setMaximumWidth(available_width)
+                self._images_layout.addWidget(img_label)
             else:
-                err = QLabel(f"[未找到图片：{filename}]")
+                err = QLabel(f"[图片格式无法识别：{filename}]")
                 err.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 err.setStyleSheet(f"color: {c['MUTED']}; font-size: 10pt; padding: 6px;")
                 self._images_layout.addWidget(err)

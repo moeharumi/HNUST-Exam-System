@@ -77,6 +77,10 @@ def run() -> None:
     from hnust_exam.services.update_checker import check_update_async
     check_update_async(_on_update_result, config_mgr)
 
+    # 后台静默检查题库更新
+    from hnust_exam.services.question_bank_updater import check_question_bank_update_async
+    check_question_bank_update_async()
+
     # 全局异常钩子
     def _excepthook(exc_type, exc_value, exc_tb):
         _log_crash(exc_type, exc_value, exc_tb)

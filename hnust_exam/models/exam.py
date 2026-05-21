@@ -175,29 +175,48 @@ class Exam:
         return earned / total * 100
 
     def find_exam_file(self, exam_name: str) -> Optional[str]:
-        """查找试卷文件路径."""
-        internal_path = get_resource_path(
-            os.path.join("题库", exam_name + ".xlsx")
-        )
-        external_path = os.path.join("题库", exam_name + ".xlsx")
+        """查找试卷文件路径，优先级：用户缓存 > 打包目录 > 开发目录."""
+        from hnust_exam.utils.constants import QUESTION_BANK_FILES_DIR
 
-        if os.path.exists(internal_path):
-            return internal_path
-        elif os.path.exists(external_path):
-            return external_path
+        candidates = [
+            os.path.join(QUESTION_BANK_FILES_DIR, "题库", exam_name + ".xlsx"),
+            get_resource_path(os.path.join("题库", exam_name + ".xlsx")),
+            os.path.join("题库", exam_name + ".xlsx"),
+        ]
+        for path in candidates:
+            if os.path.exists(path):
+                return path
         return None
 
     @staticmethod
     def list_exam_files() -> list[str]:
-        """列出所有可用的试卷文件名（含扩展名）."""
-        exam_dir = get_resource_path("题库")
-        if not os.path.exists(exam_dir):
-            external = "题库"
-            if not os.path.exists(external):
-                os.makedirs(external)
-            exam_dir = external
+        """列出所有可用的试卷文件名，优先级：用户缓存 > 打包目录 > 开发目录."""
+        from hnust_exam.utils.constants import QUESTION_BANK_FILES_DIR
 
-        return [f for f in os.listdir(exam_dir) if f.endswith(".xlsx")]
+        seen: set[str] = set()
+        result: list[str] = []
+
+        def _collect(directory: str) -> None:
+            if not os.path.isdir(directory):
+                return
+            for f in os.listdir(directory):
+                if f.endswith(".xlsx") and f not in seen:
+                    seen.add(f)
+                    result.append(f)
+
+        _collect(os.path.join(QUESTION_BANK_FILES_DIR, "题库"))
+        _collect(get_resource_path("题库"))
+
+        # 开发目录（不存在则创建）
+        dev_dir = "题库"
+        if not os.path.isdir(dev_dir):
+            try:
+                os.makedirs(dev_dir, exist_ok=True)
+            except Exception:
+                pass
+        _collect(dev_dir)
+
+        return result
 
     @staticmethod
     def get_available_categories() -> dict[str, list[str]]:
