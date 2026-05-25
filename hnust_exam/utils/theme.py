@@ -112,3 +112,8 @@ class Theme:
     def get_current_colors(cls) -> dict:
         """获取当前主题的所有颜色."""
         return cls._DARK if cls._is_dark else cls._LIGHT
+
+    @classmethod
+    def get_colors(cls, dark: bool) -> dict:
+        """按指定主题获取颜色，不改变当前全局主题."""
+        return cls._DARK if dark else cls._LIGHT

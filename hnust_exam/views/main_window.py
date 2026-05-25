@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve
-from PySide6.QtGui import QIcon, QShortcut, QKeySequence, QFont
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QIcon, QFont
 from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -100,14 +100,15 @@ class MainWindow(QMainWindow):
         if exam_page.timer_running and not exam_page.exam_submitted:
             reply = themed_question(
                 self, "确认退出",
-                "考试正在进行中，确定要退出吗？\n未交卷的答案将不会保存。",
+                "考试正在进行中，确定要退出吗？\n当前答案会保存为进行中记录。",
             )
             if reply != QMessageBox.StandardButton.Yes:
                 event.ignore()
                 return
+            exam_page.question_widget.save_current_answer()
+            exam_page._save_exam_progress("started")
             exam_page.timer_running = False
             exam_page._timer.stop()
-            exam_page.backup_mgr.cleanup()
         event.accept()
 
     def _refresh_theme(self) -> None:
@@ -143,6 +144,8 @@ class MainWindow(QMainWindow):
         self.stack.removeWidget(old)
         self.stack.insertWidget(self.PAGE_WELCOME, self.welcome_page)
         self.stack.setCurrentIndex(self.PAGE_WELCOME)
+        if hasattr(old, "_timer") and old._timer.isActive():
+            old._timer.stop()
         old.deleteLater()
 
     def _rebuild_select(self) -> None:
@@ -153,4 +156,6 @@ class MainWindow(QMainWindow):
         self.stack.removeWidget(old)
         self.stack.insertWidget(self.PAGE_SELECT, self.select_page)
         self.stack.setCurrentIndex(self.PAGE_SELECT)
+        if getattr(old, "_list_widget", None):
+            old._list_widget.stop_timers()
         old.deleteLater()

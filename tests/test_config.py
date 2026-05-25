@@ -3,7 +3,6 @@
 import os
 import json
 import tempfile
-import shutil
 
 import pytest
 
@@ -19,14 +18,12 @@ def temp_config(monkeypatch):
     skip_file = os.path.join(tmpdir, "skip_ver")
 
     import hnust_exam.utils.constants as const
-    monkeypatch.setattr(const, "_CONFIG_DIR", tmpdir)
+    monkeypatch.setattr(const, "CONFIG_DIR", tmpdir)
     monkeypatch.setattr(const, "CONFIG_FILE", config_file)
     monkeypatch.setattr(const, "PROGRESS_FILE", progress_file)
     monkeypatch.setattr(const, "SKIP_VERSION_FILE", skip_file)
 
     yield tmpdir, config_file, progress_file, skip_file
-
-    shutil.rmtree(tmpdir, ignore_errors=True)
 
 
 class TestConfigManager:

@@ -364,10 +364,12 @@ class ResultPage(QWidget):
         bar.setFixedHeight(8)
         bar.setStyleSheet(f"{_NB}background:{color};border-radius:4px;")
 
-        fill = max(1, int(pct))
-        empty = max(1, 100 - fill)
-        self._prog_lay.addWidget(bar, fill)
-        self._prog_lay.addStretch(empty)
+        fill = max(0, min(100, int(round(pct))))
+        empty = 100 - fill
+        if fill:
+            self._prog_lay.addWidget(bar, fill)
+        if empty:
+            self._prog_lay.addStretch(empty)
 
     # ─────────────── 摘要统计条 ───────────────
 

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 import difflib
 from typing import TYPE_CHECKING
 
@@ -18,9 +17,9 @@ if TYPE_CHECKING:
 
 
 def check_fill_in(user_ans: str, correct_ans: str) -> bool:
-    """检查填空题答案（支持多空，用分号/逗号分隔）."""
-    user_parts = re.split(r"[,;，；]+", user_ans.strip())
-    correct_parts = re.split(r"[,;，；]+", correct_ans.strip())
+    """检查填空题答案（多空仅用分号分隔，逗号保留为答案内容）."""
+    user_parts = user_ans.strip().replace("；", ";").split(";")
+    correct_parts = correct_ans.strip().replace("；", ";").split(";")
     user_parts = [p for p in user_parts if p]
     correct_parts = [p for p in correct_parts if p]
     if len(user_parts) != len(correct_parts):

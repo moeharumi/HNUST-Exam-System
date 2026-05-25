@@ -3,6 +3,7 @@
 import os
 import sys
 import re
+import tempfile
 
 
 def get_resource_path(relative_path: str) -> str:
@@ -66,4 +67,4 @@ def get_log_dir() -> str:
         os.makedirs(log_dir, exist_ok=True)
         return log_dir
     except Exception:
-        return os.path.dirname(os.path.abspath(sys.argv[0]))
+        return tempfile.gettempdir()

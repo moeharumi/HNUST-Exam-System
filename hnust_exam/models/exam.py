@@ -25,6 +25,7 @@ class Exam:
         self.marked_indices: set[int] = set()  # 全局索引集合
         self.current_index: int = 0
         self.is_pure_program_exam: bool = False
+        self._grade_cache: list[Result] | None = None
 
     def load_from_excel(self, file_path: str) -> str:
         """从 Excel 文件加载试卷。成功返回空字符串，失败返回错误信息."""
@@ -37,15 +38,17 @@ class Exam:
             return f"读取Excel失败：{e}"
 
         df.columns = df.columns.str.strip()
-        df = df.fillna("")
-        for col in df.columns:
-            df[col] = df[col].astype(str).str.strip()
-        df = df[df["题号"] != ""]
-        df = df[df["题目"] != ""]
-
         missing = REQUIRED_COLUMNS - set(df.columns)
         if missing:
             return f"Excel 缺少必要列：{', '.join(missing)}\n当前列：{', '.join(df.columns)}"
+
+        df = df.fillna("")
+        for col in df.columns:
+            df[col] = df[col].astype(str).str.strip()
+        before_rows = len(df)
+        df = df[df["题号"] != ""]
+        df = df[df["题目"] != ""]
+        dropped_rows = before_rows - len(df)
 
         if "程序文件" in df.columns:
             df["程序文件"] = df["程序文件"].astype(str).str.strip()
@@ -90,8 +93,12 @@ class Exam:
         self.answer_map = {}
         self.marked_indices = set()
         self.current_index = 0
+        self._grade_cache = None
 
-        return dup_warning
+        row_warning = ""
+        if dropped_rows:
+            row_warning = f"已忽略 {dropped_rows} 行空题号或空题目记录，请检查Excel文件。\n"
+        return row_warning + dup_warning
 
     def get_question(self, index: int) -> Optional[Question]:
         """按全局索引获取题目."""
@@ -105,6 +112,7 @@ class Exam:
             self.answer_map[question_number] = answer
         else:
             self.answer_map.pop(question_number, None)
+        self._grade_cache = None
 
     def get_answer(self, question_number: str) -> str:
         """获取用户答案."""
@@ -152,7 +160,9 @@ class Exam:
 
     def grade(self) -> list[Result]:
         """判分，返回每题结果."""
-        return grade_exam(self)
+        if self._grade_cache is None:
+            self._grade_cache = grade_exam(self)
+        return list(self._grade_cache)
 
     @property
     def score_percentage(self) -> float:

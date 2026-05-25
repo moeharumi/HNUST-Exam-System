@@ -195,4 +195,6 @@ class WelcomePage(QWidget):
         if not self.agree_check.isChecked():
             themed_warning(self, "提示", "请先阅读并同意以上条款")
             return
+        if hasattr(self, "_timer") and self._timer.isActive():
+            self._timer.stop()
         self.main_window.show_select()

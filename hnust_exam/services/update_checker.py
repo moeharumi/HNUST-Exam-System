@@ -88,10 +88,10 @@ def check_update_async(
     sig.result.connect(callback)
 
     def _worker() -> None:
+        info = None
         try:
             info = fetch_update_info(config_manager)
+        finally:
             sig.result.emit(info)
-        except Exception:
-            pass
 
     Thread(target=_worker, daemon=True).start()
