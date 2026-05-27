@@ -40,16 +40,16 @@ class _ToggleListWidget(QListWidget):
         self._target_value = None
         self._inertia_start = None
         self._inertia_t0 = None
-        self._inertia_duration = 0.5
+        self._inertia_duration = 0.8
         self._inertia_timer = QTimer(self)
         self._inertia_timer.setInterval(16)
         self._inertia_timer.timeout.connect(self._inertia_tick)
 
     # ─── 滚轮惯性 ───
     @staticmethod
-    def _ease_out_cubic(t: float) -> float:
-        """三次缓出，手感比指数缓出更平滑"""
-        return 1.0 - (1.0 - t) ** 3
+    def _ease_out_quart(t: float) -> float:
+        """四次缓出，比三次更平滑地减速"""
+        return 1.0 - (1.0 - t) ** 4
 
     def wheelEvent(self, e):
         delta = e.angleDelta().y()
@@ -70,7 +70,7 @@ class _ToggleListWidget(QListWidget):
             self._target_value = new_target
 
         self._inertia_start = current
-        self._inertia_t0 = time.time()
+        self._inertia_t0 = time.perf_counter()
 
         if not self._inertia_timer.isActive():
             self._inertia_timer.start()
@@ -83,9 +83,9 @@ class _ToggleListWidget(QListWidget):
             self._inertia_timer.stop()
             return
 
-        elapsed = time.time() - self._inertia_t0
+        elapsed = time.perf_counter() - self._inertia_t0
         t = min(elapsed / self._inertia_duration, 1.0)
-        progress = self._ease_out_cubic(t)
+        progress = self._ease_out_quart(t)
 
         start = self._inertia_start
         target = self._target_value
