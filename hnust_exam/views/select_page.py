@@ -6,7 +6,7 @@ import os
 import time
 from typing import TYPE_CHECKING
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, QEvent
 from PySide6.QtGui import QFont, QMouseEvent, QPixmap
 from PySide6.QtWidgets import (
     QWidget,
@@ -37,29 +37,19 @@ class _ToggleListWidget(QListWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        self._deselect_timer = QTimer(self)
-        self._deselect_timer.setSingleShot(True)
-        self._deselect_timer.setInterval(250)
-        self._deselect_timer.timeout.connect(self._do_deselect)
-
-        # 惯性滚动相关
         self._target_value = None
-        self._inertia_start = None    # 起始滚动位置
-        self._inertia_t0 = None       # 起始时间戳
-        self._inertia_duration = 0.5  # 滚动动画时长（秒）
+        self._inertia_start = None
+        self._inertia_t0 = None
+        self._inertia_duration = 0.5
         self._inertia_timer = QTimer(self)
-        self._inertia_timer.setInterval(4)  # ~250fps，实际由显示器刷新率限制
+        self._inertia_timer.setInterval(16)
         self._inertia_timer.timeout.connect(self._inertia_tick)
-
-        # QScroller 配置仅用于参数参考，不 grabGesture 以免拦截双击事件
 
     # ─── 滚轮惯性 ───
     @staticmethod
-    def _ease_out_expo(t: float) -> float:
-        """指数缓出：1 - 2^(-10t)，前快后慢，手感自然"""
-        if t >= 1.0:
-            return 1.0
-        return 1.0 - pow(2, -10 * t)
+    def _ease_out_cubic(t: float) -> float:
+        """三次缓出，手感比指数缓出更平滑"""
+        return 1.0 - (1.0 - t) ** 3
 
     def wheelEvent(self, e):
         delta = e.angleDelta().y()
@@ -67,20 +57,18 @@ class _ToggleListWidget(QListWidget):
             return
 
         sb = self.verticalScrollBar()
-        pixel_delta = delta  # 1:1 像素映射
+        pixel_delta = delta // 3
 
         current = sb.value()
         new_target = current - pixel_delta
         new_target = max(sb.minimum(), min(sb.maximum(), new_target))
 
-        # 叠加：连续快速滚轮时，目标累加而不是重置
         if self._inertia_timer.isActive() and self._target_value is not None:
             self._target_value = max(sb.minimum(), min(sb.maximum(),
                                      self._target_value - pixel_delta))
         else:
             self._target_value = new_target
 
-        # 每次滚轮重置动画起点，实现滚动"跟手"
         self._inertia_start = current
         self._inertia_t0 = time.time()
 
@@ -97,7 +85,7 @@ class _ToggleListWidget(QListWidget):
 
         elapsed = time.time() - self._inertia_t0
         t = min(elapsed / self._inertia_duration, 1.0)
-        progress = self._ease_out_expo(t)
+        progress = self._ease_out_cubic(t)
 
         start = self._inertia_start
         target = self._target_value
@@ -113,7 +101,6 @@ class _ToggleListWidget(QListWidget):
 
     # ─── 点击取消选择 ───
     def mousePressEvent(self, e: QMouseEvent):
-        # 记录按下的行，给委托绘制按压反馈
         item = self.itemAt(e.pos())
         if item:
             delegate = self.itemDelegate()
@@ -121,14 +108,14 @@ class _ToggleListWidget(QListWidget):
                 delegate.pressed_row = self.row(item)
                 self.update(self.visualItemRect(item))
 
-        if item and item.isSelected():
-            self._deselect_timer.start()
-        else:
-            self._deselect_timer.stop()
+        if item and item == self.currentItem():
+            self.clearSelection()
+            self.setCurrentItem(None)
+            return
+
         super().mousePressEvent(e)
 
     def mouseReleaseEvent(self, e: QMouseEvent):
-        """释放鼠标时清除按压状态"""
         delegate = self.itemDelegate()
         if hasattr(delegate, 'pressed_row'):
             old_row = delegate.pressed_row
@@ -138,9 +125,6 @@ class _ToggleListWidget(QListWidget):
                 if item:
                     self.update(self.visualItemRect(item))
         super().mouseReleaseEvent(e)
-
-    def _do_deselect(self):
-        self.clearSelection()
 
 
 class SelectPage(QWidget):
@@ -366,7 +350,7 @@ class SelectPage(QWidget):
 
         # ========== 试卷列表（stretch 吃满剩余高度） ==========
         self._list_widget = _ToggleListWidget()
-        self._list_widget.itemDoubleClicked.connect(lambda: self._on_start())
+        self._list_widget.itemDoubleClicked.connect(lambda _: self._on_start())
         self._list_widget.setSpacing(0)
         self._list_widget.setMinimumWidth(500)
         self._list_widget.setMaximumWidth(640)
@@ -427,6 +411,7 @@ class SelectPage(QWidget):
             f"background-color: {c['PRIMARY']}; color: white; font-size: 16pt; "
             f"font-weight: bold; padding: 12px 40px; border: none; border-radius: 4px; "
         )
+        self.start_btn.setEnabled(False)
         self.start_btn.clicked.connect(self._on_start)
         layout.addWidget(self.start_btn, 0, Qt.AlignmentFlag.AlignCenter)
 
@@ -470,7 +455,7 @@ class SelectPage(QWidget):
     #  键盘事件过滤
     # ================================================================
     def eventFilter(self, obj, event):
-        if event.type() == event.Type.MouseButtonDblClick:
+        if event.type() == QEvent.Type.MouseButtonDblClick:
             if obj is self._py_btn:
                 self._on_category_click("Python")
                 if self._confirm_btn.isEnabled():
@@ -482,7 +467,7 @@ class SelectPage(QWidget):
                     self._on_confirm_category()
                 return True
         if obj is self._list_widget:
-            if event.type() == event.Type.KeyPress:
+            if event.type() == QEvent.Type.KeyPress:
                 if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
                     self._on_start()
                     return True
@@ -535,8 +520,6 @@ class SelectPage(QWidget):
             self._list_widget.blockSignals(False)
             return
 
-        self.start_btn.setEnabled(True)
-
         for fname in self.exam_files:
             text = self._make_item_text(fname, progress)
             tooltip = self._make_tooltip(fname, progress)
@@ -557,8 +540,10 @@ class SelectPage(QWidget):
         """更新当前选中的试卷文件名"""
         if current:
             self._selected_file = current.data(Qt.ItemDataRole.UserRole)
+            self.start_btn.setEnabled(True)
         else:
             self._selected_file = ""
+            self.start_btn.setEnabled(False)
 
     def _on_paper_selection_changed(self, current, previous):
         """选择变化时触发弹性动画"""
@@ -572,11 +557,12 @@ class SelectPage(QWidget):
     #  开始考试
     # ================================================================
     def _on_start(self) -> None:
-        if not self._selected_file:
+        item = self._list_widget.currentItem()
+        if not item:
             themed_warning(self, "警告", "请先选择一份试卷")
             return
 
-        exam_file = self._selected_file
+        exam_file = item.data(Qt.ItemDataRole.UserRole)
         exam_name = os.path.splitext(exam_file)[0]
 
         exam = Exam()
