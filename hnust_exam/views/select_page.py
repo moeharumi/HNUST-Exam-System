@@ -353,7 +353,7 @@ class SelectPage(QWidget):
         c = Theme.get_current_colors()
         layout = QVBoxLayout(self._exam_page)
         layout.setContentsMargins(20, 0, 20, 20)
-        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.setSpacing(12)
 
         # 标题（显示当前类别）
         self._exam_title = QLabel("请选择试卷")
@@ -362,9 +362,9 @@ class SelectPage(QWidget):
             f"color: {c['TEXT']}; font-size: 24pt; font-weight: bold; "
             f"padding: 40px 0 20px 0;"
         )
-        layout.addWidget(self._exam_title)
+        layout.addWidget(self._exam_title, 0, Qt.AlignmentFlag.AlignCenter)
 
-        # ========== 试卷列表 ==========
+        # ========== 试卷列表（stretch 吃满剩余高度） ==========
         self._list_widget = _ToggleListWidget()
         self._list_widget.itemDoubleClicked.connect(lambda: self._on_start())
         self._list_widget.setSpacing(0)
@@ -381,17 +381,14 @@ class SelectPage(QWidget):
         )
         self._list_widget.setContentsMargins(8, 8, 8, 8)
 
-        # 挂载自定义代理
         self._card_delegate = AnimatedCardDelegate(c, self._list_widget)
         self._list_widget.setItemDelegate(self._card_delegate)
 
-        # 信号连接
         self._list_widget.selectionModel().currentChanged.connect(
             self._on_paper_selection_changed
         )
         self._list_widget.currentItemChanged.connect(self._on_current_changed)
 
-        # 样式表
         self._list_widget.setStyleSheet(
             f"QListWidget {{"
             f"  background-color: {c['SURFACE']};"
@@ -420,7 +417,8 @@ class SelectPage(QWidget):
 
         self._list_widget.installEventFilter(self)
 
-        layout.addWidget(self._list_widget, 1, Qt.AlignmentFlag.AlignCenter)
+        # 关键：stretch=1 吃满剩余空间，AlignHCenter 水平居中
+        layout.addWidget(self._list_widget, 1, Qt.AlignmentFlag.AlignHCenter)
 
         # ---- 开始按钮 ----
         self.start_btn = QPushButton("开始考试")
@@ -428,7 +426,6 @@ class SelectPage(QWidget):
         self.start_btn.setStyleSheet(
             f"background-color: {c['PRIMARY']}; color: white; font-size: 16pt; "
             f"font-weight: bold; padding: 12px 40px; border: none; border-radius: 4px; "
-            f"margin-top: 20px;"
         )
         self.start_btn.clicked.connect(self._on_start)
         layout.addWidget(self.start_btn, 0, Qt.AlignmentFlag.AlignCenter)
@@ -437,9 +434,9 @@ class SelectPage(QWidget):
         hint = QLabel("该程序免费提供给HNUST学生使用，禁止任何形式的商用售卖")
         hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         hint.setStyleSheet(
-            f"color: {c['MUTED']}; font-size: 8pt; padding-top: 10px;"
+            f"color: {c['MUTED']}; font-size: 8pt;"
         )
-        layout.addWidget(hint)
+        layout.addWidget(hint, 0, Qt.AlignmentFlag.AlignCenter)
 
     # ================================================================
     #  模式切换
