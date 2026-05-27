@@ -11,7 +11,7 @@ from hnust_exam.utils import constants
 
 
 def _ensure_config_dir() -> None:
-    os.makedirs(constants._CONFIG_DIR, exist_ok=True)
+    os.makedirs(constants.CONFIG_DIR, exist_ok=True)
 
 
 class ConfigManager:

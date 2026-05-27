@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import webbrowser
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -42,6 +43,7 @@ class ExamPage(QWidget):
         self.remaining_time: int = EXAM_TIME_SECONDS
         self.timer_running: bool = False
         self.exam_submitted: bool = False
+        self._submit_in_progress: bool = False
         self.show_answer_immediately: bool = False
         self.backup_mgr = BackupManager()
 
@@ -216,6 +218,7 @@ class ExamPage(QWidget):
         self.exam_file_path = file_path
         self.remaining_time = EXAM_TIME_SECONDS
         self.exam_submitted = False
+        self._submit_in_progress = False
 
         # 加载设置
         cfg = self.main_window.config_mgr.load_config()
@@ -274,8 +277,6 @@ class ExamPage(QWidget):
 
     def hideEvent(self, event) -> None:
         super().hideEvent(event)
-        self.timer_running = False
-        self._timer.stop()
 
     def keyPressEvent(self, event) -> None:
         """处理考试页快捷键（ExamPage 自身获得焦点时）."""
@@ -338,7 +339,7 @@ class ExamPage(QWidget):
     # ── 计时器 ────────────────────────────────────────────────
 
     def _tick(self) -> None:
-        if not self.timer_running or self.exam_submitted:
+        if not self.timer_running or self.exam_submitted or self._submit_in_progress:
             return
         self.remaining_time -= 1
         if self.remaining_time <= 0:
@@ -370,6 +371,7 @@ class ExamPage(QWidget):
     def _force_submit(self) -> None:
         if self.exam_submitted:
             return
+        self._submit_in_progress = True
         self.timer_running = False
         self._timer.stop()
         self.exam_submitted = True
@@ -378,6 +380,7 @@ class ExamPage(QWidget):
         results = self.exam.grade()
         score_pct = self._calc_score_pct(results)
         self._save_exam_progress("completed", score_pct)
+        self.backup_mgr.cleanup()
         self._show_result(results)
 
     # ── 导航操作 ──────────────────────────────────────────────
@@ -428,7 +431,6 @@ class ExamPage(QWidget):
         self.question_widget.display_correct_answer()
 
     def show_analysis(self) -> None:
-        import webbrowser
         reply = themed_question(
             self, "试题解析",
             "暂时没有解析，问问豆包吧\n\n是否跳转到豆包网页版？",
@@ -495,8 +497,8 @@ class ExamPage(QWidget):
             themed_info(self, "提示", "该题目没有对应的程序文件")
             return
 
-        program_file = q.program_file
-        if ".." in program_file or program_file.startswith(("/", "\\")):
+        program_file = q.program_file.strip()
+        if self.backup_mgr.is_unsafe_program_path(program_file):
             themed_critical(self, "错误", "不允许的文件路径")
             return
 
@@ -505,19 +507,17 @@ class ExamPage(QWidget):
         if not os.path.exists(base_dir):
             base_dir = exam_dir
 
-        program_path = os.path.normpath(os.path.join(base_dir, program_file))
-        if not os.path.exists(program_path):
-            alt_path = os.path.normpath(os.path.join(exam_dir, program_file))
-            if os.path.exists(alt_path):
-                program_path = alt_path
-            else:
-                themed_critical(self, "错误", f"找不到程序文件：{program_file}")
-                return
+        program_path = self.backup_mgr.resolve_program_path(program_file, exam_dir, must_exist=True)
+        if not program_path or not os.path.exists(program_path):
+            themed_critical(self, "错误", f"找不到程序文件：{program_file}")
+            return
 
         from hnust_exam.services.python_env import open_with_idle
-        from hnust_exam.utils.constants import CURRENT_VERSION
         cfg = self.main_window.config_mgr.load_config()
         python_path = cfg.get("user_python_path", "")
+        if not python_path or not os.path.isfile(python_path):
+            from hnust_exam.services.python_env import find_system_python
+            python_path = find_system_python() or ""
 
         success = open_with_idle(program_path, python_path or None)
         if success:
@@ -551,25 +551,32 @@ class ExamPage(QWidget):
     # ── 交卷 ──────────────────────────────────────────────────
 
     def submit_exam(self) -> None:
-        if self.exam_submitted or not self.exam:
+        if self.exam_submitted or self._submit_in_progress or not self.exam:
             return
 
         self.question_widget.save_current_answer()
+        self._submit_in_progress = True
+        self.timer_running = False
+        self._timer.stop()
 
         # 交卷确认对话框
         from hnust_exam.views.dialogs.submit_dialog import SubmitDialog
         dlg = SubmitDialog(self.exam, self)
         if dlg.exec():
-            self.timer_running = False
-            self._timer.stop()
             self.exam_submitted = True
             self.backup_mgr.cleanup()
             results = self.exam.grade()
             score_pct = self._calc_score_pct(results)
             self._save_exam_progress("completed", score_pct)
             self._show_result(results)
-        elif dlg.check_marked_index is not None:
+            return
+
+        self._submit_in_progress = False
+        if dlg.check_marked_index is not None:
             self.jump_to(dlg.check_marked_index)
+        if not self.exam_submitted and self.remaining_time > 0:
+            self.timer_running = True
+            self._timer.start(1000)
 
     @staticmethod
     def _calc_score_pct(results: list[Result]) -> float:

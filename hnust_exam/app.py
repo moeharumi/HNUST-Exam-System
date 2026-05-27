@@ -19,6 +19,11 @@ from hnust_exam.views.main_window import MainWindow
 
 def run() -> None:
     """启动应用."""
+    def _excepthook(exc_type, exc_value, exc_tb):
+        _log_crash(exc_type, exc_value, exc_tb)
+
+    sys.excepthook = _excepthook
+
     # Windows 高 DPI 感知（必须在 QApplication 之前设置）
     if sys.platform == "win32":
         import ctypes
@@ -61,12 +66,6 @@ def run() -> None:
     # 创建主窗口
     main_window = MainWindow(config_mgr)
     main_window.show()
-
-    # 全局异常钩子
-    def _excepthook(exc_type, exc_value, exc_tb):
-        _log_crash(exc_type, exc_value, exc_tb)
-
-    sys.excepthook = _excepthook
 
     sys.exit(app.exec())
 
@@ -199,4 +198,5 @@ def _log_crash(exc_type, exc_value, exc_tb) -> None:
             f.write("".join(traceback.format_exception(exc_type, exc_value, exc_tb)))
             f.write("\n")
     except Exception:
-        pass
+        print("写入崩溃日志失败", file=sys.stderr)
+        traceback.print_exception(exc_type, exc_value, exc_tb, file=sys.stderr)

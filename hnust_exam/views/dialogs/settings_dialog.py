@@ -31,6 +31,7 @@ class SettingsDialog(QDialog):
         self._orig_dark = Theme._is_dark
         self._orig_scale = Theme._font_scale
         self._marks_cleared = False
+        self._status_hint: QLabel | None = None
 
         cfg = config_mgr.load_config()
         self._show_immediately = cfg.get("show_answer_immediately", False)
@@ -127,7 +128,7 @@ class SettingsDialog(QDialog):
         self.feedback_check = ToggleSwitch()
         self.feedback_check.setChecked(self._show_immediately)
         fc.addWidget(self.feedback_check)
-        self.feedback_check.toggled.connect(lambda: self._update_hint() if hasattr(self, '_status_hint') else None)
+        self.feedback_check.toggled.connect(lambda _checked=False: self._update_hint())
         body_layout.addWidget(feedback_card)
 
         # ── 卡片2：深色模式 ──
@@ -153,7 +154,7 @@ class SettingsDialog(QDialog):
         self.dark_check = ToggleSwitch()
         self.dark_check.setChecked(Theme._is_dark)
         dc.addWidget(self.dark_check)
-        self.dark_check.toggled.connect(lambda: self._update_hint() if hasattr(self, '_status_hint') else None)
+        self.dark_check.toggled.connect(lambda _checked=False: self._update_hint())
         body_layout.addWidget(dark_card)
 
         # ── 卡片3：字体大小 ──
@@ -336,8 +337,10 @@ class SettingsDialog(QDialog):
         is_active = self.feedback_check.isChecked()
         # 使用预览状态的颜色（深色模式切换尚未生效）
         preview_dark = self.dark_check.isChecked()
-        colors = Theme._DARK if preview_dark else Theme._LIGHT
+        colors = Theme.get_colors(preview_dark)
         color = colors["SUCCESS"] if is_active else colors["PRIMARY"]
+        if self._status_hint is None:
+            return
         self._status_hint.setText(f"答题：{mode}  |  主题：{theme}  |  字体：{scale}%")
         self._status_hint.setStyleSheet(f"color: {color}; font-size: 9pt; padding: 5px 0;")
 

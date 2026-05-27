@@ -80,7 +80,7 @@ class _ToggleListWidget(QListWidget):
 
         # 每次滚轮重置动画起点，实现滚动"跟手"
         self._inertia_start = current
-        self._inertia_t0 = time.time()
+        self._inertia_t0 = time.monotonic()
 
         if not self._inertia_timer.isActive():
             self._inertia_timer.start()
@@ -93,7 +93,7 @@ class _ToggleListWidget(QListWidget):
             self._inertia_timer.stop()
             return
 
-        elapsed = time.time() - self._inertia_t0
+        elapsed = time.monotonic() - self._inertia_t0
         t = min(elapsed / self._inertia_duration, 1.0)
         progress = self._ease_out_expo(t)
 
@@ -108,6 +108,10 @@ class _ToggleListWidget(QListWidget):
             self._inertia_start = None
             self._inertia_t0 = None
             self._inertia_timer.stop()
+
+    def stop_timers(self) -> None:
+        self._deselect_timer.stop()
+        self._inertia_timer.stop()
 
     # ─── 点击取消选择 ───
     def mousePressEvent(self, e: QMouseEvent):
