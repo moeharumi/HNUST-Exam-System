@@ -37,59 +37,62 @@ class _ToggleListWidget(QListWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        self._target_value = None
-        self._inertia_start = None
-        self._inertia_t0 = None
-        self._inertia_duration = 0.8
+        self._target_value: int | None = None
+        self._inertia_start: int | None = None
+        self._inertia_t0: float | None = None
+        self._inertia_duration = 0.5
         self._inertia_timer = QTimer(self)
-        self._inertia_timer.setInterval(16)
+        self._inertia_timer.setInterval(4)
         self._inertia_timer.timeout.connect(self._inertia_tick)
 
-    # ─── 滚轮惯性 ───
     @staticmethod
-    def _ease_out_quart(t: float) -> float:
-        """四次缓出，比三次更平滑地减速"""
-        return 1.0 - (1.0 - t) ** 4
+    def _ease_out_expo(t: float) -> float:
+        if t >= 1.0:
+            return 1.0
+        return 1.0 - pow(2, -10 * t)
 
-    def wheelEvent(self, e):
-        delta = e.angleDelta().y()
+    def wheelEvent(self, event):
+        delta = event.angleDelta().y()
         if delta == 0:
             return
 
         sb = self.verticalScrollBar()
-        pixel_delta = delta // 3
-
         current = sb.value()
-        new_target = current - pixel_delta
-        new_target = max(sb.minimum(), min(sb.maximum(), new_target))
+        pixel_delta = delta
+        new_target = max(sb.minimum(), min(sb.maximum(), current - pixel_delta))
 
         if self._inertia_timer.isActive() and self._target_value is not None:
-            self._target_value = max(sb.minimum(), min(sb.maximum(),
-                                     self._target_value - pixel_delta))
+            self._target_value = max(
+                sb.minimum(),
+                min(sb.maximum(), self._target_value - pixel_delta),
+            )
         else:
             self._target_value = new_target
 
         self._inertia_start = current
-        self._inertia_t0 = time.perf_counter()
+        self._inertia_t0 = time.time()
 
         if not self._inertia_timer.isActive():
             self._inertia_timer.start()
 
-        e.accept()
+        event.accept()
 
     def _inertia_tick(self):
         sb = self.verticalScrollBar()
-        if self._target_value is None or self._inertia_t0 is None:
+        if (
+            self._target_value is None
+            or self._inertia_start is None
+            or self._inertia_t0 is None
+        ):
             self._inertia_timer.stop()
             return
 
-        elapsed = time.perf_counter() - self._inertia_t0
+        elapsed = time.time() - self._inertia_t0
         t = min(elapsed / self._inertia_duration, 1.0)
-        progress = self._ease_out_quart(t)
-
-        start = self._inertia_start
-        target = self._target_value
-        current = int(start + (target - start) * progress)
+        progress = self._ease_out_expo(t)
+        current = int(
+            self._inertia_start + (self._target_value - self._inertia_start) * progress
+        )
         sb.setValue(current)
 
         if t >= 1.0:
