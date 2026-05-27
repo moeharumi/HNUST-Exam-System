@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QAbstractItemView,
     QStackedWidget,
+    QScrollArea,
 )
 
 from hnust_exam.models.exam import Exam
@@ -353,7 +354,23 @@ class SelectPage(QWidget):
         c = Theme.get_current_colors()
         layout = QVBoxLayout(self._exam_page)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        # ---- 滚动容器（窗口缩小时整页可滚） ----
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QFrame.Shape.NoFrame)
+        scroll_area.setStyleSheet(f"background-color: {c['BG']};")
+        scroll_area.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        scroll_area.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded
+        )
+
+        scroll_content = QWidget()
+        scroll_layout = QVBoxLayout(scroll_content)
+        scroll_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        scroll_layout.setContentsMargins(20, 20, 20, 20)
 
         # 标题（显示当前类别）
         self._exam_title = QLabel("请选择试卷")
@@ -362,7 +379,7 @@ class SelectPage(QWidget):
             f"color: {c['TEXT']}; font-size: 24pt; font-weight: bold; "
             f"padding: 40px 0 20px 0;"
         )
-        layout.addWidget(self._exam_title)
+        scroll_layout.addWidget(self._exam_title)
 
         # ========== 试卷列表 ==========
         self._list_widget = _ToggleListWidget()
@@ -370,7 +387,7 @@ class SelectPage(QWidget):
         self._list_widget.setSpacing(0)
         self._list_widget.setMinimumWidth(500)
         self._list_widget.setMaximumWidth(640)
-        self._list_widget.setMinimumHeight(600)
+        self._list_widget.setMinimumHeight(400)
         self._list_widget.setHorizontalScrollBarPolicy(
             Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         )
@@ -421,7 +438,7 @@ class SelectPage(QWidget):
 
         self._list_widget.installEventFilter(self)
 
-        layout.addWidget(self._list_widget, 1, Qt.AlignmentFlag.AlignCenter)
+        scroll_layout.addWidget(self._list_widget, 0, Qt.AlignmentFlag.AlignCenter)
 
         # ---- 开始按钮 ----
         self.start_btn = QPushButton("开始考试")
@@ -432,15 +449,18 @@ class SelectPage(QWidget):
             f"margin-top: 20px;"
         )
         self.start_btn.clicked.connect(self._on_start)
-        layout.addWidget(self.start_btn, 0, Qt.AlignmentFlag.AlignCenter)
+        scroll_layout.addWidget(self.start_btn, 0, Qt.AlignmentFlag.AlignCenter)
 
         # ---- 底部提示 ----
         hint = QLabel("该程序免费提供给HNUST学生使用，禁止任何形式的商用售卖")
         hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         hint.setStyleSheet(
-            f"color: {c['MUTED']}; font-size: 8pt; padding-top: 10px;"
+            f"color: {c['MUTED']}; font-size: 8pt; padding-top: 10px; padding-bottom: 20px;"
         )
-        layout.addWidget(hint)
+        scroll_layout.addWidget(hint)
+
+        scroll_area.setWidget(scroll_content)
+        layout.addWidget(scroll_area)
 
     # ================================================================
     #  模式切换
