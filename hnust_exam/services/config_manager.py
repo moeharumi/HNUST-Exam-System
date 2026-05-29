@@ -25,6 +25,7 @@ class ConfigManager:
         "student_name": "",
         "student_id": "",
         "grading_strictness": "normal",
+        "github_token": "",
     }
 
     def __init__(self) -> None:

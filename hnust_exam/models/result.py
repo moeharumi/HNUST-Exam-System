@@ -16,3 +16,5 @@ class Result:
     correct_answer: str
     is_correct: bool
     question_text: str
+    earned_score: float = 0.0  # 实际得分（0 / half / full / 按比例）
+    is_half: bool = False  # 半对（多选部分正确、填空部分正确）

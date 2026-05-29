@@ -358,15 +358,22 @@ class QuestionWidget(QWidget):
             self._answer_layout.addWidget(self._answer_entry)
 
     def _populate_images(self, q: Question, c: dict) -> None:
-        """在图片区域填充题目图片和图注."""
-        from hnust_exam.utils.helpers import get_question_bank_subdir
+        """在图片区域填充题目图片和图注.
+
+        图片居中显示在题目文字下方，宽度不超过内容区，高度不超过视口 60%。
+        """
+        from hnust_exam.services.resource_manager import get_image_dir
 
         # 计算可用宽度（内容区宽度 - 左右边距）
         available_width = self._content.width() - 40
         if available_width < 200:
             available_width = 500  # fallback（布局尚未完成时）
 
-        img_dir = get_question_bank_subdir("试题图片")
+        # 最大高度：视口高度的 60%，避免长图撑爆页面
+        viewport_height = self._scroll_area.viewport().height()
+        max_height = max(200, int(viewport_height * 0.6))
+
+        img_dir = get_image_dir()
 
         for ref, filename in q.images.items():
             img_path = os.path.join(img_dir, filename)
@@ -376,7 +383,7 @@ class QuestionWidget(QWidget):
             pixmap = QPixmap(img_path)
             if not pixmap.isNull():
                 scaled = pixmap.scaled(
-                    available_width, 4096,
+                    available_width, max_height,
                     Qt.AspectRatioMode.KeepAspectRatio,
                     Qt.TransformationMode.SmoothTransformation,
                 )

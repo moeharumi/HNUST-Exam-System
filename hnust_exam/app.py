@@ -19,6 +19,31 @@ from hnust_exam.views.main_window import MainWindow
 
 def run() -> None:
     """启动应用."""
+    # ── 日志系统初始化 ──
+    import logging
+    from hnust_exam.utils.constants import LOG_DIR
+    os.makedirs(LOG_DIR, exist_ok=True)
+    log_file = os.path.join(LOG_DIR, "update.log")
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        handlers=[
+            logging.FileHandler(log_file, encoding="utf-8"),
+            logging.StreamHandler(),
+        ],
+    )
+    logger = logging.getLogger("hnust_exam")
+    from hnust_exam.utils.constants import CURRENT_VERSION
+    logger.info("应用启动，版本: %s", CURRENT_VERSION)
+
+    # ── 题库资源初始化（首次启动从 _MEIPASS 复制，之后只从 AppData 读取）──
+    from hnust_exam.services.resource_manager import ensure_initialized
+    ensure_initialized()
+
+    # 清理上次更新残留的备份文件
+    from hnust_exam.services.auto_updater import clean_old_backup
+    clean_old_backup()
+
     # Windows 高 DPI 感知（必须在 QApplication 之前设置）
     if sys.platform == "win32":
         import ctypes
@@ -77,9 +102,9 @@ def run() -> None:
     from hnust_exam.services.update_checker import check_update_async
     check_update_async(_on_update_result, config_mgr)
 
-    # 后台静默检查题库更新
-    from hnust_exam.services.question_bank_updater import check_question_bank_update_async
-    check_question_bank_update_async()
+    # 启动时检查题库整包热更新（从 Gitee Release 下载 zip 替换本地题库）
+    from hnust_exam.services.resource_pack_updater import check_pack_update_async
+    check_pack_update_async()
 
     # 全局异常钩子
     def _excepthook(exc_type, exc_value, exc_tb):

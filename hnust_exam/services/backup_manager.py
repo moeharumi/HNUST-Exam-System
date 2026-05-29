@@ -20,12 +20,13 @@ class BackupManager:
         self, exam_file_path: str, exam: Exam
     ) -> None:
         """初始化备份：将所有引用的程序文件备份到 _backup_programs 目录."""
-        exam_dir = os.path.dirname(exam_file_path)
-        source_dir = os.path.join(exam_dir, "试题文件夹")
-        if not os.path.exists(source_dir):
-            source_dir = exam_dir
+        from hnust_exam.services.resource_manager import get_program_dir, get_question_bank_root
 
-        self._backup_dir = os.path.join(exam_dir, "_backup_programs")
+        source_dir = get_program_dir()
+        if not os.path.isdir(source_dir):
+            source_dir = get_question_bank_root()
+
+        self._backup_dir = os.path.join(get_question_bank_root(), "_backup_programs")
         if os.path.exists(self._backup_dir):
             shutil.rmtree(self._backup_dir)
         os.makedirs(self._backup_dir, exist_ok=True)
@@ -50,10 +51,8 @@ class BackupManager:
         if not os.path.exists(backup_file):
             return
 
-        exam_dir = os.path.dirname(exam_file_path)
-        target_path = os.path.join(exam_dir, "试题文件夹", program_file)
-        if not os.path.exists(target_path):
-            target_path = os.path.join(exam_dir, program_file)
+        from hnust_exam.services.resource_manager import get_program_dir
+        target_path = os.path.join(get_program_dir(), program_file)
 
         try:
             shutil.copy2(backup_file, target_path)

@@ -15,24 +15,9 @@ def get_resource_path(relative_path: str) -> str:
 
 
 def get_question_bank_subdir(subdir_name: str) -> str:
-    """获取题库子目录路径（如 试题图片、试题文件夹），优先用户缓存.
-
-    Priority:
-        1. 用户本地缓存 (~/.hnust_exam/question_bank/files/题库/<subdir>)
-        2. PyInstaller 打包目录 (sys._MEIPASS/题库/<subdir>)
-        3. 开发模式目录 (./题库/<subdir>)
-    """
-    from hnust_exam.utils.constants import QUESTION_BANK_FILES_DIR
-
-    user_dir = os.path.join(QUESTION_BANK_FILES_DIR, "题库", subdir_name)
-    if os.path.isdir(user_dir):
-        return user_dir
-
-    internal = get_resource_path(os.path.join("题库", subdir_name))
-    if os.path.isdir(internal):
-        return internal
-
-    return os.path.join("题库", subdir_name)
+    """获取题库子目录路径（委托 ResourceManager）."""
+    from hnust_exam.services.resource_manager import get_question_bank_root
+    return os.path.join(get_question_bank_root(), subdir_name)
 
 
 def version_tuple(v: str) -> tuple:

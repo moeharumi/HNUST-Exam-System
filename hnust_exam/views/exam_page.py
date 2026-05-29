@@ -518,19 +518,16 @@ class ExamPage(QWidget):
             themed_critical(self, "错误", "不允许的文件路径")
             return
 
-        exam_dir = os.path.dirname(self.exam_file_path)
-        base_dir = os.path.join(exam_dir, "试题文件夹")
-        if not os.path.exists(base_dir):
-            base_dir = exam_dir
+        from hnust_exam.services.resource_manager import get_program_dir
+        base_dir = get_program_dir()
+        if not os.path.isdir(base_dir):
+            themed_critical(self, "错误", f"试题文件夹目录不存在：{base_dir}")
+            return
 
         program_path = os.path.normpath(os.path.join(base_dir, program_file))
         if not os.path.exists(program_path):
-            alt_path = os.path.normpath(os.path.join(exam_dir, program_file))
-            if os.path.exists(alt_path):
-                program_path = alt_path
-            else:
-                themed_critical(self, "错误", f"找不到程序文件：{program_file}")
-                return
+            themed_critical(self, "错误", f"找不到程序文件：{program_file}")
+            return
 
         # 根据题目语言或文件扩展名选择打开方式
         is_c = q.language == "c" or program_file.lower().endswith(".c")
@@ -574,10 +571,11 @@ class ExamPage(QWidget):
             themed_critical(self, "错误", f"打开文件失败，未找到合适的C语言编辑器")
 
     def open_exam_folder(self) -> None:
-        exam_dir = os.path.dirname(self.exam_file_path)
-        folder = os.path.join(exam_dir, "试题文件夹")
-        if not os.path.exists(folder):
-            folder = exam_dir
+        from hnust_exam.services.resource_manager import get_program_dir
+        folder = get_program_dir()
+        if not os.path.isdir(folder):
+            themed_critical(self, "错误", f"试题文件夹目录不存在：{folder}")
+            return
         try:
             if os.name == "nt":
                 os.startfile(folder)

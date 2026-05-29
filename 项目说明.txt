@@ -22,7 +22,7 @@ PythonProject1/
 │   ├── app.py                 ← 程序启动的"总开关"
 │   ├── utils/                 ← 工具箱（放一些通用的小功能）
 │   ├── models/                ← 数据模型（存放试卷、题目、答案的数据结构）
-│   ├── services/              ← 服务层（干具体活的，比如判分、找Python）
+│   ├── services/              ← 服务层（干具体活的，比如判分、找Python、自动更新）
 │   ├── viewmodels/            ← 视图模型（目前预留，未来扩展用）
 │   └── views/                 ← 界面（你看到的所有窗口、按钮、页面都在这）
 │
@@ -69,7 +69,7 @@ PythonProject1/
 
 【utils/constants.py】（常量 - 存放固定不变的值）
   存放程序用到的所有"固定值"：
-  - CURRENT_VERSION = "v1.0.5"  ← 版本号，发新版本时改这里
+  - CURRENT_VERSION = "v1.1.4"  ← 版本号，发新版本时改这里
   - GITHUB_USERNAME = "RyanTanC"  ← GitHub 用户名
   - GITHUB_REPO_NAME = "HNUST-Exam-System"  ← GitHub 仓库名
   - EXAM_TIME_SECONDS = 3600  ← 考试总时间（秒），60分钟=3600秒
@@ -209,8 +209,9 @@ PythonProject1/
 
 【services/update_checker.py】（更新检查）
   去 GitHub 检查有没有新版本：
-  - check_update_async()  ← 在后台线程检查更新
-  - fetch_update_info()   ← 调用 GitHub API 获取最新版本信息
+  - check_update_async()       ← 在后台线程检查更新
+  - fetch_update_info()        ← 调用 GitHub API 获取最新版本信息
+  - fetch_latest_release_info()← 获取最新发布信息（含 expected_size）
 
   怎么改：
   ┌─────────────────────────────────────────────────────────────────────────┐
@@ -218,7 +219,22 @@ PythonProject1/
   │   → 修改 utils/constants.py 里的 GITHUB_USERNAME 和 GITHUB_REPO_NAME │
   │                                                                       │
   │ 想关掉更新检测？                                                     │
-  │   → 在 app.py 里找到 _check_updates_async() 的调用，注释掉即可      │
+  │   → 在 app.py 里找到 check_update_async() 的调用，注释掉即可        │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+【services/auto_updater.py】（自动更新模块 - 下载+替换+重启）
+  打包后的 exe 自动更新核心模块：
+  - get_app_exe_path()        ← 获取当前 exe 路径（frozen 用 sys.argv[0]）
+  - check_write_permission()  ← 检查目录是否可写
+  - get_temp_download_path()  ← 获取临时下载路径（系统临时目录）
+  - download_file()           ← 流式下载 + 进度回调 + 大小校验
+  - replace_and_restart()     ← 备份→替换→重启（失败自动回滚）
+  - clean_old_backup()        ← 启动时清理 .old.bak 残留文件
+
+  怎么改：
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ 一般不用改。如果更新后重启失败，检查 replace_and_restart() 的逻辑    │
+  │ 想改临时文件名？→ 修改 get_temp_download_path() 里的文件名            │
   └─────────────────────────────────────────────────────────────────────────┘
 
 --------------------------------------------------------------------------------
@@ -422,8 +438,13 @@ PythonProject1/
 【dialogs/update_dialog.py】（更新对话框）
   发现新版本时弹出的窗口：
   - 当前版本 vs 最新版本
-  - 更新日志
+  - 更新日志（支持 Markdown 格式：标题、列表）
   - "跳过此版本"、"暂不更新"、"立即更新"三个按钮
+  - 打包环境（frozen）：点击"立即更新"自动下载→校验→替换→重启
+    · 下载进度条 + 速度 + 剩余时间
+    · 下载中禁用所有按钮
+    · 下载失败可点"重试更新"
+  - 开发环境：点击"立即更新"打开浏览器下载页
 
 --------------------------------------------------------------------------------
 2.8  hnust_exam/views/widgets/（自定义控件）
@@ -536,7 +557,7 @@ PythonProject1/
 3.8  我想改版本号
 --------------------------------------------------------------------------------
   1. 打开 hnust_exam/utils/constants.py
-  2. 把 CURRENT_VERSION = "v1.0.5" 改成新版本号
+  2. 把 CURRENT_VERSION = "v1.1.4" 改成新版本号
   3. 保存
 
 --------------------------------------------------------------------------------
@@ -624,8 +645,10 @@ PythonProject1/
 --------------------------------------------------------------------------------
   在 PyCharm 终端输入以下命令（整行复制粘贴）：
 
- .venv/Scripts/pyinstaller.exe --onefile --windowed --icon=icon.ico --name "HNUST仿真平台" --add-data "题库;题库" --add-data "icon.ico;." --collect-all PySide6 --hidden-import PySide6.QtCore --hidden-import PySide6.QtGui --hidden-import PySide6.QtWidgets --hidden-import PySide6.QtNetwork --runtime-tmpdir "%TEMP%\HNUST_simulation_temp" main.py
-
+.venv/Scripts/pyinstaller.exe --onefile --windowed --icon=icon.ico --name "HNUST仿真平台" --add-data "题库;题库"
+  --add-data "icon.ico;." --add-data "hnust_exam/resources;hnust_exam/resources" --hidden-import PySide6.QtCore
+  --hidden-import PySide6.QtGui --hidden-import PySide6.QtWidgets --hidden-import PySide6.QtNetwork --runtime-tmpdir
+  "%TEMP%\HNUST_simulation_temp" main.py
   参数解释：
   --onefile     = 打包成单个 .exe 文件（不加的话会生成一堆文件）
   --windowed    = 运行时不显示黑色命令行窗口
@@ -633,6 +656,10 @@ PythonProject1/
   --name "HNUST仿真平台" = 生成的 exe 文件名叫这个
   --add-data "题库;题库" = 把题库文件夹一起打包进去
   main.py       = 要打包的入口文件
+
+  ⚠️ 注意：不要加 --runtime-tmpdir 参数！
+     加了会导致多实例冲突（第二个实例会覆盖第一个的临时文件）。
+     PyInstaller 默认每个实例用随机的 _MEIxxxx 目录，互不干扰。
 
 --------------------------------------------------------------------------------
 5.4  找到打包好的 exe
@@ -674,7 +701,7 @@ PythonProject1/
 --------------------------------------------------------------------------------
 5.6  更简单的打包方式（用 .spec 文件）
 --------------------------------------------------------------------------------
-  项目里已经有一个 HNUST仿真平台.spec 文件（旧版的）。
+  项目里已经有一个 HNUST仿真平台.spec 文件。
   你可以重新生成一个新的：
 
   1. 先执行一次上面的打包命令，会自动生成 .spec 文件
@@ -955,7 +982,6 @@ PythonProject1/
     --collect-all PySide6 ^
     --hidden-import PySide6.QtCore --hidden-import PySide6.QtGui ^
     --hidden-import PySide6.QtWidgets --hidden-import PySide6.QtNetwork ^
-    --runtime-tmpdir "%%TEMP%%\HNUST_simulation_temp" ^
     main.py
 
   运行时的图片路径解析：
@@ -1056,3 +1082,266 @@ PythonProject1/
   4. 调试时先确认"是数据问题还是代码问题"：
      写个脚本加载试卷，打印每道题的 images 字段，看数据是否正确。
      数据正确但图片不显示，才是代码问题；数据本身为空，就先去填 Excel。
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+2026-05-27  —  软件自动更新：下载 + 替换 + 重启  v1.1.6
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+【改动文件】
+  1. hnust_exam/services/auto_updater.py      — 新建：自动更新核心模块
+  2. hnust_exam/services/update_checker.py    — 修改：提取 expected_size
+  3. hnust_exam/views/dialogs/update_dialog.py — 重写：支持下载进度 + 自动替换
+  4. hnust_exam/app.py                        — 修改：启动时清理旧备份
+  5. HNUST仿真平台.spec                       — 修改：移除 runtime_tmpdir
+
+【功能说明】
+  之前点"立即更新"只是打开浏览器让用户手动下载。
+  现在在打包环境（.exe）下，点击"立即更新"会：
+    1. 自动从 GitHub 下载最新版 exe（带进度条、速度、剩余时间）
+    2. 下载到系统临时目录（不污染安装目录）
+    3. 校验文件大小是否一致（防止下载不完整）
+    4. 备份当前 exe 为 .old.bak
+    5. 用新 exe 替换当前 exe
+    6. 自动启动新版本，退出当前进程
+    7. 新版本启动时自动清理 .old.bak 残留
+
+  如果替换失败，会自动回滚（恢复 .old.bak 为原 exe），保证原程序不受影响。
+
+  开发环境（python main.py）下行为不变：点"立即更新"打开浏览器。
+
+【技术细节】
+
+  一、exe 路径问题（PyInstaller --onefile 模式）
+  ──────────────────────────────────────────────
+  PyInstaller --onefile 打包的 exe 运行时会解压到临时目录：
+    · sys.executable  → 指向临时目录里的解压副本（不能用这个！）
+    · sys.argv[0]     → 指向用户双击的那个原始 exe（用这个！）
+
+  所以 get_app_exe_path() 用的是 os.path.abspath(sys.argv[0])。
+
+  二、下载到临时目录再替换
+  ──────────────────────────────────────────────
+  不直接覆盖正在运行的 exe，而是：
+    1. 先下载到 tempfile.gettempdir()/HNUST_update_tmp.exe
+    2. 校验文件大小 == expected_size（从 GitHub API 的 assets[0].size 获取）
+    3. 校验通过后再执行替换
+
+  三、原子替换 + 回滚
+  ──────────────────────────────────────────────
+    1. os.replace(exe_path, backup_path)     ← 当前 exe → .old.bak
+    2. shutil.move(new_exe_path, exe_path)   ← 新 exe → 原位置
+       如果第2步失败：os.replace(backup_path, exe_path) 回滚
+
+  四、重启方式
+  ──────────────────────────────────────────────
+    subprocess.Popen([exe_path], close_fds=True)  ← 启动新 exe
+    sys.exit(0)                                    ← 退出当前进程
+    注意：Windows 不支持 os.execv，所以用 subprocess.Popen
+
+  五、线程安全
+  ──────────────────────────────────────────────
+  下载在 QThread 后台线程执行，进度通过 Qt Signal 派发到主线程更新 UI：
+    · _DownloadThread.progress = Signal(int, float, int)  ← 百分比、速度、剩余秒
+    · _DownloadThread.finished = Signal(bool, str)         ← 是否成功、错误信息
+
+  六、runtime_tmpdir 移除
+  ──────────────────────────────────────────────
+  之前 spec 里有 --runtime-tmpdir "%TEMP%\HNUST_simulation_temp"，
+  这会导致多实例冲突（第二个实例解压到同一目录会覆盖第一个）。
+  移除后每个实例使用随机的 _MEIxxxx 目录，互不干扰。
+
+  七、启动时清理
+  ──────────────────────────────────────────────
+  app.py 的 run() 最开始调用 clean_old_backup()，删除上次更新留下的 .old.bak。
+  这样即使上次更新成功但清理失败，下次启动也会自动清理。
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+2026-05-28  —  工业级资源热更新架构  v1.1.7
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+【改动文件】
+  1. hnust_exam/services/resource_manager.py       — 新建：统一资源路径管理
+  2. hnust_exam/services/resource_pack_updater.py   — 新建：zip 整包热更新
+  3. hnust_exam/services/question_bank_updater.py   — 修复：下载路径双重嵌套
+  4. scripts/generate_manifest.py                   — 修复：manifest key 含 题库/ 前缀
+  5. scripts/build_resource_pack.py                 — 新建：资源包自动构建工具
+  6. hnust_exam/utils/helpers.py                    — 修改：委托 ResourceManager
+  7. hnust_exam/models/exam.py                      — 修改：委托 ResourceManager
+  8. hnust_exam/views/question_widget.py            — 修改：图片加载改用 ResourceManager
+  9. hnust_exam/views/exam_page.py                  — 修改：程序文件查找改用 ResourceManager
+ 10. hnust_exam/services/backup_manager.py          — 修改：备份目录改用 ResourceManager
+ 11. hnust_exam/utils/constants.py                  — 新增 LOG_DIR
+ 12. hnust_exam/app.py                              — 新增：日志系统 + 题库初始化
+
+【核心变更】
+  ■ ResourceManager 统一入口：所有题库资源（xlsx、图片、程序文件）的读取
+    全部通过 resource_manager.py，不再直接拼接路径。
+  ■ 运行时只从 AppData 读取：~/.hnust_exam/question_bank/files/
+  ■ 首次启动自动初始化：打包环境从 _MEIPASS 复制，开发环境从项目 题库/ 复制
+  ■ 修复路径双重嵌套：question_bank_updater 下载目标从 files/题库/rel_path 改为 files/rel_path
+  ■ 修复 manifest key：generate_manifest.py 的 key 不再含 题库/ 前缀
+  ■ zip 整包更新：从 GitHub Release 下载 question_bank.zip → SHA256 校验 → 原子替换
+  ■ 日志系统：所有更新操作记录到 ~/.hnust_exam/logs/update.log
+
+
+================================================================================
+第七部分：日常工作流程
+================================================================================
+
+--------------------------------------------------------------------------------
+7.1  修改题库内容（新增/编辑试卷、图片、程序文件）
+--------------------------------------------------------------------------------
+
+  操作步骤：
+  1. 直接编辑 题库/ 目录下的 xlsx、图片、程序文件
+  2. 运行构建（在终端执行）：
+
+     python scripts/build_resource_pack.py --clean
+
+  3. 去 GitHub 创建 Release：
+     · Tag 填版本号，如 2026.05.28
+     · 上传 dist/question_bank.zip
+     · 上传 dist/question_bank.zip.sha256
+     · 点"Publish release"
+
+  4. 用户下次启动客户端 → 自动检测到新版本 → 自动下载更新
+
+  构建脚本支持的参数：
+     python scripts/build_resource_pack.py --clean          ← 清理旧产物后构建
+     python scripts/build_resource_pack.py --version 2026.05.29  ← 指定版本号
+     python scripts/build_resource_pack.py -v               ← 显示详细日志
+
+  构建产物：
+     dist/question_bank.zip          ← 资源包（上传到 GitHub Release）
+     dist/question_bank.zip.sha256   ← SHA256 校验文件（上传到 GitHub Release）
+     题库/manifest.json              ← 本地 manifest（随代码提交）
+
+--------------------------------------------------------------------------------
+7.2  修改代码（Python 代码变更）
+--------------------------------------------------------------------------------
+
+  操作步骤：
+  1. 改代码
+  2. 本地测试：PyCharm 里运行 main.py（题库从项目 题库/ 目录自动初始化到 AppData）
+  3. 运行测试：.venv/Scripts/python.exe -m pytest tests/ -v
+  4. git commit + push
+  5. 需要发新版本时：
+     · 修改 constants.py 的 CURRENT_VERSION
+     · 打包 exe（见第五部分）
+     · 上传到 GitHub Release
+
+--------------------------------------------------------------------------------
+7.3  三种更新机制的关系
+--------------------------------------------------------------------------------
+
+  ┌──────────────────┬────────────────────────┬────────────────────────────┐
+  │ 更新类型          │ 触发方式                │ 更新内容                    │
+  ├──────────────────┼────────────────────────┼────────────────────────────┤
+  │ exe 更新          │ auto_updater            │ 应用程序本身（.exe 文件）   │
+  │                  │ 检测 exe Release         │ 下载→替换→重启             │
+  ├──────────────────┼────────────────────────┼────────────────────────────┤
+  │ 题库整包更新      │ resource_pack_updater   │ 题库全量替换（.zip 文件）   │
+  │                  │ 检测 zip Release         │ 下载→校验→原子替换          │
+  ├──────────────────┼────────────────────────┼────────────────────────────┤
+  │ 题库增量更新      │ question_bank_updater   │ 单文件 diff 同步            │
+  │                  │ 对比 manifest.json       │ 只下载变化的文件            │
+  └──────────────────┴────────────────────────┴────────────────────────────┘
+
+  三种更新互相独立，可以单独触发，也可以同时进行。
+
+--------------------------------------------------------------------------------
+7.4  最简发版清单（每次发版照着做）
+--------------------------------------------------------------------------------
+
+  □ 题库更新：
+    1. 编辑 题库/ 目录
+    2. python scripts/build_resource_pack.py --clean
+    3. GitHub 创建 Release → 上传 question_bank.zip + question_bank.zip.sha256
+
+  □ 代码更新：
+    1. 改代码 → 测试 → git push
+    2. 修改 constants.py 的 CURRENT_VERSION
+    3. 打包 exe → GitHub 创建 Release → 上传 .exe
+
+  □ 验证：
+    1. 用另一台电脑（或删除 ~/.hnust_exam/ 目录）启动 exe
+    2. 确认题库自动下载、自动更新
+    3. 确认 exe 更新弹窗正常
+
+--------------------------------------------------------------------------------
+7.5  开发环境 vs 打包环境的区别
+--------------------------------------------------------------------------------
+
+  ┌──────────────────┬─────────────────────────┬────────────────────────────┐
+  │                  │ 开发环境（PyCharm）      │ 打包环境（.exe）            │
+  ├──────────────────┼─────────────────────────┼────────────────────────────┤
+  │ 题库来源          │ 首次从项目 题库/ 复制    │ 首次从 _MEIPASS 复制        │
+  │                  │ 到 AppData               │ 到 AppData                  │
+  ├──────────────────┼─────────────────────────┼────────────────────────────┤
+  │ 题库运行时路径    │ ~/.hnust_exam/           │ ~/.hnust_exam/              │
+  │                  │ question_bank/files/     │ question_bank/files/        │
+  ├──────────────────┼─────────────────────────┼────────────────────────────┤
+  │ exe 自动更新      │ 点"立即更新"打开浏览器   │ 自动下载→替换→重启          │
+  ├──────────────────┼─────────────────────────┼────────────────────────────┤
+  │ 题库热更新        │ 不触发（无 Release）     │ 自动检测 GitHub Release     │
+  ├──────────────────┼─────────────────────────┼────────────────────────────┤
+  │ 日志文件          │ ~/.hnust_exam/logs/      │ ~/.hnust_exam/logs/         │
+  │                  │ update.log               │ update.log                  │
+  └──────────────────┴─────────────────────────┴────────────────────────────┘
+
+--------------------------------------------------------------------------------
+7.6  GitHub Release 上传流程（详细步骤）
+--------------------------------------------------------------------------------
+
+  方式一：网页上传（推荐新手）
+  1. 打开 https://github.com/RyanTanC/HNUST-Exam-System/releases
+  2. 点 "Draft a new release"
+  3. Tag 填版本号（如 2026.05.28），选 "Create new tag on publish"
+  4. Release title 填版本号
+  5. Description 填更新说明
+  6. 拖入以下文件：
+     · dist/question_bank.zip         ← 题库资源包
+     · dist/question_bank.zip.sha256  ← SHA256 校验文件
+     · dist/HNUST仿真平台.exe         ← 程序本体（如有更新）
+  7. 点 "Publish release"
+
+  方式二：命令行上传（适合自动化）
+  1. 安装 GitHub CLI：winget install GitHub.cli
+  2. 登录：gh auth login
+  3. 创建 Release 并上传：
+     gh release create 2026.05.28 \
+       dist/question_bank.zip \
+       dist/question_bank.zip.sha256 \
+       dist/HNUST仿真平台.exe \
+       --title "2026.05.28" \
+       --notes "更新说明"
+
+--------------------------------------------------------------------------------
+7.7  常见问题
+--------------------------------------------------------------------------------
+
+  Q: 构建脚本报错"题库目录不存在"？
+  A: 确认在项目根目录运行，且 题库/ 文件夹存在。
+
+  Q: zip 内部结构不对（有 题库/ 前缀）？
+  A: 这是旧版 generate_manifest.py 的问题。用 build_resource_pack.py 构建
+     不会有这个问题，它自动处理目录结构。
+
+  Q: 用户报告更新后题库为空？
+  A: 检查：
+     1. zip 内部是否有 manifest.json
+     2. manifest.json 的 key 是否含 题库/ 前缀（不应该有）
+     3. xlsx 文件是否在 zip 根目录下（不在子目录里）
+     4. 查看用户日志 ~/.hnust_exam/logs/update.log
+
+  Q: 如何回退到旧版题库？
+  A: GitHub Release 页面可以删除 Release，删除后客户端检测不到新版本。
+     如果需要紧急回退，发布一个新 Release 包含旧版题库即可。
+
+  Q: 增量更新和整包更新会冲突吗？
+  A: 不会。整包更新会重新生成本地 manifest.json，增量更新基于 manifest
+     对比。整包更新后 manifest 版本号变化，增量更新会自动适配。
+
+================================================================================
+                      项目说明结束
+================================================================================

@@ -79,7 +79,13 @@
       "Bash(dir *)",
       "PowerShell(& \"C:\\\\Users\\\\Hyper_hui\\\\PycharmProjects\\\\PythonProject1\\\\.venv\\\\Scripts\\\\python.exe\" \"C:\\\\Users\\\\Hyper_hui\\\\PycharmProjects\\\\PythonProject1\\\\main.py\")",
       "Bash(Get-ChildItem -Recurse \"C:\\\\Users\\\\Hyper_hui\\\\PycharmProjects\\\\PythonProject1\\\\题库\")",
-      "Bash(Select-Object FullName)"
+      "Bash(Select-Object FullName)",
+      "Bash(tasklist /FI \"IMAGENAME eq python.exe\")",
+      "Bash(Get-ChildItem \"C:\\\\Users\\\\Hyper_hui\\\\PycharmProjects\\\\PythonProject1\" -Recurse -Depth 1 -Name)",
+      "Bash(Select-Object -First 60)",
+      "PowerShell(Test-Path *)",
+      "Bash(copy *)",
+      "Bash(sqlite3 *)"
     ]
   }
 }
