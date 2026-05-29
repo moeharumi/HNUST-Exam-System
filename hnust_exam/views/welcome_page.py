@@ -22,6 +22,8 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QFrame,
+    QScroller,
+    QScrollerProperties,
 )
 
 from hnust_exam.utils.constants import CURRENT_VERSION
@@ -206,6 +208,26 @@ class WelcomePage(QWidget):
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+        # 配置惯性滚动
+        scroller = QScroller.scroller(scroll_area.viewport())
+        scroller.grabGesture(scroll_area.viewport(), QScroller.TouchGesture)
+        prop = scroller.scrollerProperties()
+        prop.setScrollMetric(
+            QScrollerProperties.ScrollMetric.FrameRate,
+            QScrollerProperties.FrameRates.Fps60,
+        )
+        prop.setScrollMetric(
+            QScrollerProperties.ScrollMetric.VerticalOvershootPolicy,
+            QScrollerProperties.OvershootPolicy.OvershootAlwaysOff,
+        )
+        prop.setScrollMetric(
+            QScrollerProperties.ScrollMetric.DecelerationFactor, 0.9
+        )
+        prop.setScrollMetric(
+            QScrollerProperties.ScrollMetric.DragVelocitySmoothingFactor, 2.0
+        )
+        scroller.setScrollerProperties(prop)
 
         scroll_content = QWidget()
         scroll_layout = QVBoxLayout(scroll_content)
