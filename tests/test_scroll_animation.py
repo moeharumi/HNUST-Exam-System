@@ -60,3 +60,39 @@ def test_welcome_page_scroll_smoothness(app):
     welcome_page = WelcomePage(MockMainWindow())
 
     assert welcome_page.isVisible() or welcome_page.width() > 0
+
+
+def test_main_window_has_animation_method(app):
+    """测试主窗口是否有动画切换方法."""
+    from hnust_exam.views.main_window import MainWindow
+    from hnust_exam.services.config_manager import ConfigManager
+
+    config_mgr = ConfigManager()
+    main_window = MainWindow(config_mgr)
+
+    assert hasattr(main_window, 'switch_to_page'), "主窗口应该有 switch_to_page 方法"
+    assert callable(getattr(main_window, 'switch_to_page')), "switch_to_page 应该是可调用的"
+
+
+def test_page_switch_animation_imports(app):
+    """测试页面切换动画所需的导入."""
+    from PySide6.QtCore import QPropertyAnimation, QEasingCurve, QRect, QAbstractAnimation
+
+    assert QPropertyAnimation is not None
+    assert QEasingCurve is not None
+    assert QRect is not None
+    assert QAbstractAnimation is not None
+
+
+def test_main_window_page_constants(app):
+    """测试主窗口页面常量."""
+    from hnust_exam.views.main_window import MainWindow
+    from hnust_exam.services.config_manager import ConfigManager
+
+    config_mgr = ConfigManager()
+    main_window = MainWindow(config_mgr)
+
+    assert main_window.PAGE_WELCOME == 0
+    assert main_window.PAGE_SELECT == 1
+    assert main_window.PAGE_EXAM == 2
+    assert main_window.PAGE_RESULT == 3

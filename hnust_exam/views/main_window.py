@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve
+from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve, QRect, QAbstractAnimation
 from PySide6.QtGui import QIcon, QShortcut, QKeySequence, QFont
 from PySide6.QtWidgets import (
     QApplication,
@@ -79,8 +79,30 @@ class MainWindow(QMainWindow):
         self.statusBar().addPermanentWidget(self._watermark_right)
 
     def switch_to_page(self, page_index: int) -> None:
-        """切换到指定页面."""
+        """切换到指定页面，带滑动动画."""
+        current_index = self.stack.currentIndex()
+        if current_index == page_index:
+            return
+
+        current_geometry = self.stack.geometry()
+
+        animation = QPropertyAnimation(self.stack, b"geometry")
+        animation.setDuration(300)
+        animation.setEasingCurve(QEasingCurve.OutCubic)
+
+        if page_index > current_index:
+            start_x = current_geometry.width()
+        else:
+            start_x = -current_geometry.width()
+
+        start_rect = QRect(start_x, 0, current_geometry.width(), current_geometry.height())
+        end_rect = QRect(0, 0, current_geometry.width(), current_geometry.height())
+
+        animation.setStartValue(start_rect)
+        animation.setEndValue(end_rect)
+
         self.stack.setCurrentIndex(page_index)
+        animation.start(QAbstractAnimation.DeleteWhenStopped)
 
     def show_welcome(self) -> None:
         self.switch_to_page(self.PAGE_WELCOME)
