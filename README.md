@@ -115,9 +115,9 @@
 
 ---
 
-## 📝 内测反馈
+## 📝 反馈
 
-当前版本为**内测版**（Beta），可能存在一些 bug 和不完善的地方。
+当前版本为正式版，可能存在一些 bug 和不完善的地方。
 如果遇到任何问题或有改进建议，欢迎通过以下方式反馈：
 
 1.  **GitHub Issues**：[提交 Issue](https://github.com/RyanTanC/HNUST-Exam-System/issues)
