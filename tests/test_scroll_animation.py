@@ -96,3 +96,44 @@ def test_main_window_page_constants(app):
     assert main_window.PAGE_SELECT == 1
     assert main_window.PAGE_EXAM == 2
     assert main_window.PAGE_RESULT == 3
+
+
+def test_welcome_page_full_integration(app):
+    """欢迎页面完整集成测试."""
+    from hnust_exam.views.welcome_page import WelcomePage
+    from PySide6.QtWidgets import QScroller, QScrollerProperties
+
+    class MockMainWindow:
+        def show_select(self):
+            pass
+
+    welcome_page = WelcomePage(MockMainWindow())
+
+    assert welcome_page.width() > 0 or welcome_page.isVisible()
+
+    scroll_area = welcome_page.findChild(QScrollArea)
+    assert scroll_area is not None
+
+    scroller = QScroller.scroller(scroll_area.viewport())
+    assert scroller is not None
+
+    prop = scroller.scrollerProperties()
+    max_fps = prop.scrollMetric(QScrollerProperties.ScrollMetric.FrameRate)
+    assert max_fps == QScrollerProperties.FrameRates.Fps60
+
+
+def test_main_window_full_integration(app):
+    """主窗口完整集成测试."""
+    from hnust_exam.views.main_window import MainWindow
+    from hnust_exam.services.config_manager import ConfigManager
+
+    config_mgr = ConfigManager()
+    main_window = MainWindow(config_mgr)
+
+    main_window.show()
+    assert main_window.isVisible()
+
+    assert hasattr(main_window, 'switch_to_page')
+
+    assert main_window.PAGE_WELCOME == 0
+    assert main_window.PAGE_SELECT == 1
