@@ -603,6 +603,31 @@ git commit -m "feat: 完成欢迎页面滑动效果优化
 
 ---
 
+## 规格合规性修复记录
+
+**日期：** 2026-05-29
+
+### 问题 1：多余测试
+
+规格要求 3 个测试，实现创建了 4 个。`test_scroll_area_deceleration` 不在规格中，已删除。
+
+### 问题 2：API 适配导致规格项省略
+
+规格使用了不存在的 PySide6 API，实现者正确适配到真实 API，但部分规格项无等效 API：
+
+| 规格项 | 实际 API | 状态 |
+|--------|---------|------|
+| `FrameRateMaximum` | `FrameRate` + `Fps60` | ✅ 已适配 |
+| `FrameRateMinimum` | 无等效 API | ⚠️ 已省略（无最低帧率设置） |
+| `VerticalOverscrollPolicy` | `VerticalOvershootPolicy` + `OvershootAlwaysOff` | ✅ 已适配 |
+| `ScrollingInProgressDecelerationFactor` | `DecelerationFactor` | ✅ 已适配 |
+| `AirspeedFactor` | `DragVelocitySmoothingFactor` | ✅ 已适配 |
+| `SlideFactor` | 无等效 API | ⚠️ 已省略（无滑动因子设置） |
+
+**省略原因：** PySide6 的 `QScrollerProperties.ScrollMetric` 枚举中不存在 `FrameRateMinimum` 和 `SlideFactor` 对应项。Qt 文档中这两个是 Qt Quick 的属性，不适用于 Widgets 的 QScroller。
+
+---
+
 ## 验证清单
 
 完成所有任务后，验证以下内容：

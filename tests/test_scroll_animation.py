@@ -49,27 +49,6 @@ def test_scroll_area_scroller_properties(app):
         "帧率应该设置为 Fps60"
 
 
-def test_scroll_area_deceleration(app):
-    """测试 QScroller 减速因子配置."""
-    from hnust_exam.views.welcome_page import WelcomePage
-    from PySide6.QtWidgets import QScroller, QScrollerProperties
-
-    class MockMainWindow:
-        def show_select(self):
-            pass
-
-    welcome_page = WelcomePage(MockMainWindow())
-    scroll_area = welcome_page.findChild(QScrollArea)
-
-    scroller = QScroller.scroller(scroll_area.viewport())
-    prop = scroller.scrollerProperties()
-
-    deceleration = prop.scrollMetric(
-        QScrollerProperties.ScrollMetric.DecelerationFactor
-    )
-    assert 0 < deceleration < 1, f"减速因子应该在 0-1 之间，实际值: {deceleration}"
-
-
 def test_welcome_page_scroll_smoothness(app):
     """测试欢迎页面滚动是否平滑（基本功能测试）."""
     from hnust_exam.views.welcome_page import WelcomePage
