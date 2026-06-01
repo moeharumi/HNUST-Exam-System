@@ -242,8 +242,8 @@ class ExamPage(QWidget):
         has_program = any(q.q_type in PROGRAM_TYPES for q in exam.questions)
         if has_program:
             python_path = cfg.get("user_python_path", "")
-            from hnust_exam.services.python_env import find_system_python
-            if not python_path or not os.path.isfile(python_path):
+            from hnust_exam.services.python_env import find_system_python, is_usable_python_selection
+            if not is_usable_python_selection(python_path):
                 found = find_system_python()
                 if not found:
                     from hnust_exam.views.dialogs.python_env_dialog import PythonEnvDialog
@@ -538,7 +538,7 @@ class ExamPage(QWidget):
 
     def _open_py_file(self, program_path: str, display_name: str) -> None:
         """用 IDLE 打开 .py 文件，失败则回退系统默认."""
-        from hnust_exam.services.python_env import open_with_idle
+        from hnust_exam.services.python_env import open_with_default_app, open_with_idle
         cfg = self.main_window.config_mgr.load_config()
         python_path = cfg.get("user_python_path", "")
 
@@ -548,14 +548,12 @@ class ExamPage(QWidget):
                         f"已用IDLE打开：{display_name}\n"
                         "修改完成后按Ctrl+S保存，然后回到本系统输入答案")
         else:
-            import subprocess
             try:
-                if os.name == "nt":
-                    os.startfile(program_path)
+                if open_with_default_app(program_path):
+                    themed_info(self, "提示",
+                                f"已用默认程序打开：{display_name}\n（未检测到Python IDLE）")
                 else:
-                    subprocess.run(["xdg-open", program_path], check=True)
-                themed_info(self, "提示",
-                            f"已用默认程序打开：{display_name}\n（未检测到Python IDLE）")
+                    raise RuntimeError("未找到系统默认打开方式")
             except Exception as e:
                 themed_critical(self, "错误", f"打开文件失败：{e}")
 
@@ -577,11 +575,9 @@ class ExamPage(QWidget):
             themed_critical(self, "错误", f"试题文件夹目录不存在：{folder}")
             return
         try:
-            if os.name == "nt":
-                os.startfile(folder)
-            else:
-                import subprocess
-                subprocess.run(["xdg-open", folder], check=True)
+            from hnust_exam.services.python_env import open_with_default_app
+            if not open_with_default_app(folder):
+                raise RuntimeError("未找到系统默认打开方式")
         except Exception as e:
             themed_critical(self, "错误", f"打开文件夹失败：{e}")
 
