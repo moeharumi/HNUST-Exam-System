@@ -22,6 +22,27 @@ def _add_file_candidate(candidates: list[str], path: str | None) -> None:
         candidates.append(path)
 
 
+def _python_supports_idle(python_exe: str) -> bool:
+    try:
+        result = subprocess.run(
+            [python_exe, "-c", "import idlelib"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            **_subprocess_kwargs(),
+        )
+        return result.returncode == 0
+    except Exception:
+        return False
+
+
+def _first_idle_capable_python(candidates: list[str]) -> str | None:
+    for candidate in candidates:
+        if _python_supports_idle(candidate):
+            return candidate
+    return None
+
+
 def _version_key(value: str) -> tuple[int, ...]:
     parts: list[int] = []
     for part in value.replace("-", ".").split("."):
@@ -90,7 +111,7 @@ def _find_macos_python() -> str | None:
     for name in ["python3", "python"]:
         _add_file_candidate(candidates, shutil.which(name))
 
-    return candidates[0] if candidates else None
+    return _first_idle_capable_python(candidates) or _find_macos_idle_app()
 
 
 def _find_posix_python() -> str | None:
@@ -139,7 +160,7 @@ def is_usable_python_selection(path: str | None) -> bool:
 
 
 def find_system_python() -> str | None:
-    """查找系统中可用的 Python 解释器路径."""
+    """查找系统中可用的 Python 解释器路径，macOS 可返回 IDLE.app."""
     if sys.platform == "darwin":
         return _find_macos_python()
     if sys.platform != "win32":
@@ -259,6 +280,8 @@ def _open_idle_app(idle_app: str, abs_path: str) -> bool:
 
 
 def _open_with_python_idle(python_exe: str, abs_path: str) -> bool:
+    if not _python_supports_idle(python_exe):
+        return False
     try:
         subprocess.Popen(
             [python_exe, "-m", "idlelib", abs_path],
@@ -368,8 +391,13 @@ def open_with_idle(file_path: str, python_exe: str | None = None) -> bool:
     # 系统 Python
     python_exe = find_system_python()
     if python_exe:
-        if _open_with_python_idle(python_exe, abs_path):
-            return True
+        selected = normalize_python_selection(python_exe)
+        if selected:
+            if _is_idle_app(selected):
+                if _open_idle_app(selected, abs_path):
+                    return True
+            elif _open_with_python_idle(selected, abs_path):
+                return True
         # idle.pyw 回退
         python_dir = os.path.dirname(python_exe)
         idle_pyw = os.path.join(python_dir, "Lib", "idlelib", "idle.pyw")

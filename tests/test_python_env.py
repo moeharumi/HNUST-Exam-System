@@ -47,6 +47,22 @@ def test_open_with_idle_uses_selected_macos_idle_app(monkeypatch, tmp_path):
     ]
 
 
+def test_open_with_python_idle_requires_idlelib(monkeypatch, tmp_path):
+    program_file = tmp_path / "Prog00001.py"
+    program_file.write_text("", encoding="utf-8")
+    calls = []
+
+    def fake_popen(args, **kwargs):
+        calls.append((args, kwargs))
+        return object()
+
+    monkeypatch.setattr(python_env, "_python_supports_idle", lambda path: False)
+    monkeypatch.setattr(python_env.subprocess, "Popen", fake_popen)
+
+    assert python_env._open_with_python_idle("/tmp/python3", str(program_file)) is False
+    assert calls == []
+
+
 def test_open_with_default_app_uses_macos_open(monkeypatch, tmp_path):
     monkeypatch.setattr(python_env.sys, "platform", "darwin")
     program_file = tmp_path / "Prog00001.py"
