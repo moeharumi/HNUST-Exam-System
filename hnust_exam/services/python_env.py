@@ -8,12 +8,144 @@ import subprocess
 import sys
 
 
-def find_system_python() -> str | None:
-    """查找系统中可用的 Python 解释器路径."""
-    if sys.platform != "win32":
+def _subprocess_kwargs() -> dict:
+    if sys.platform == "win32":
+        return {"creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0)}
+    return {}
+
+
+def _add_file_candidate(candidates: list[str], path: str | None) -> None:
+    if not path:
+        return
+    path = os.path.abspath(os.path.expanduser(path))
+    if os.path.isfile(path) and path not in candidates:
+        candidates.append(path)
+
+
+def _version_key(value: str) -> tuple[int, ...]:
+    parts: list[int] = []
+    for part in value.replace("-", ".").split("."):
+        try:
+            parts.append(int(part))
+        except ValueError:
+            parts.append(-1)
+    return tuple(parts)
+
+
+def _add_macos_framework_pythons(candidates: list[str], versions_dir: str) -> None:
+    if not os.path.isdir(versions_dir):
+        return
+
+    version_dirs: list[str] = []
+    for name in os.listdir(versions_dir):
+        path = os.path.join(versions_dir, name)
+        if os.path.isdir(path):
+            version_dirs.append(path)
+
+    version_dirs.sort(
+        key=lambda p: _version_key(os.path.basename(p)),
+        reverse=True,
+    )
+    for version_dir in version_dirs:
+        _add_file_candidate(candidates, os.path.join(version_dir, "bin", "python3"))
+        _add_file_candidate(candidates, os.path.join(version_dir, "bin", "python"))
+
+
+def _find_macos_python() -> str | None:
+    candidates: list[str] = []
+    home = os.path.expanduser("~")
+
+    for versions_dir in [
+        "/Library/Frameworks/Python.framework/Versions",
+        os.path.join(home, "Library", "Frameworks", "Python.framework", "Versions"),
+    ]:
+        _add_file_candidate(candidates, os.path.join(versions_dir, "Current", "bin", "python3"))
+        _add_macos_framework_pythons(candidates, versions_dir)
+
+    for path in [
+        "/opt/homebrew/bin/python3",
+        "/opt/homebrew/bin/python",
+        "/usr/local/bin/python3",
+        "/usr/local/bin/python",
+        "/usr/bin/python3",
+        os.path.join(home, "miniconda3", "bin", "python"),
+        os.path.join(home, "anaconda3", "bin", "python"),
+        os.path.join(home, "mambaforge", "bin", "python"),
+        os.path.join(home, "miniforge3", "bin", "python"),
+    ]:
+        _add_file_candidate(candidates, path)
+
+    pyenv_versions = os.path.join(home, ".pyenv", "versions")
+    if os.path.isdir(pyenv_versions):
+        version_dirs = [
+            os.path.join(pyenv_versions, name)
+            for name in os.listdir(pyenv_versions)
+            if os.path.isdir(os.path.join(pyenv_versions, name))
+        ]
+        version_dirs.sort(key=lambda p: _version_key(os.path.basename(p)), reverse=True)
+        for version_dir in version_dirs:
+            _add_file_candidate(candidates, os.path.join(version_dir, "bin", "python3"))
+            _add_file_candidate(candidates, os.path.join(version_dir, "bin", "python"))
+
+    for name in ["python3", "python"]:
+        _add_file_candidate(candidates, shutil.which(name))
+
+    return candidates[0] if candidates else None
+
+
+def _find_posix_python() -> str | None:
+    candidates: list[str] = []
+    for name in ["python3", "python"]:
+        _add_file_candidate(candidates, shutil.which(name))
+    for path in ["/usr/bin/python3", "/usr/local/bin/python3", "/opt/local/bin/python3"]:
+        _add_file_candidate(candidates, path)
+    return candidates[0] if candidates else None
+
+
+def _is_idle_app(path: str) -> bool:
+    return (
+        sys.platform == "darwin"
+        and path.lower().endswith(".app")
+        and os.path.isdir(path)
+        and os.path.basename(path).lower() == "idle.app"
+    )
+
+
+def _idle_app_in_dir(path: str) -> str | None:
+    idle_app = os.path.join(path, "IDLE.app")
+    return idle_app if _is_idle_app(idle_app) else None
+
+
+def normalize_python_selection(path: str | None) -> str | None:
+    """规范化用户选择的 Python/IDLE 路径，返回可保存的路径."""
+    if not path:
         return None
 
-    NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    path = os.path.abspath(os.path.expanduser(path))
+    if os.path.isfile(path):
+        return path
+
+    if sys.platform == "darwin" and os.path.isdir(path):
+        if _is_idle_app(path):
+            return path
+        return _idle_app_in_dir(path)
+
+    return None
+
+
+def is_usable_python_selection(path: str | None) -> bool:
+    """判断保存的 Python/IDLE 路径是否仍可使用."""
+    return normalize_python_selection(path) is not None
+
+
+def find_system_python() -> str | None:
+    """查找系统中可用的 Python 解释器路径."""
+    if sys.platform == "darwin":
+        return _find_macos_python()
+    if sys.platform != "win32":
+        return _find_posix_python()
+
+    popen_kwargs = _subprocess_kwargs()
     candidates: list[str] = []
 
     # 优先 py -3
@@ -23,21 +155,18 @@ def find_system_python() -> str | None:
             result = subprocess.run(
                 [py_path, "-3", "-c", "import sys; print(sys.executable)"],
                 capture_output=True, text=True, timeout=5,
-                creationflags=NO_WINDOW,
+                **popen_kwargs,
             )
             if result.returncode == 0:
                 exe = result.stdout.strip()
-                if exe and os.path.isfile(exe) and exe not in candidates:
-                    candidates.append(exe)
+                _add_file_candidate(candidates, exe)
     except Exception:
         pass
 
     # PATH 中的 python/python3
     for name in ["python", "python3"]:
         try:
-            p = shutil.which(name)
-            if p and os.path.isfile(p) and p not in candidates:
-                candidates.append(p)
+            _add_file_candidate(candidates, shutil.which(name))
         except Exception:
             pass
 
@@ -46,13 +175,12 @@ def find_system_python() -> str | None:
         result = subprocess.run(
             ["where", "python"],
             capture_output=True, text=True, timeout=5,
-            creationflags=NO_WINDOW,
+            **popen_kwargs,
         )
         if result.returncode == 0:
             for line in result.stdout.strip().splitlines():
                 line = line.strip()
-                if line and os.path.isfile(line) and line not in candidates:
-                    candidates.append(line)
+                _add_file_candidate(candidates, line)
     except Exception:
         pass
 
@@ -74,8 +202,7 @@ def find_system_python() -> str | None:
                                 ) as ik:
                                     path = winreg.QueryValue(ik, "")
                                     exe = os.path.join(path, "python.exe")
-                                    if os.path.isfile(exe) and exe not in candidates:
-                                        candidates.append(exe)
+                                    _add_file_candidate(candidates, exe)
                             except Exception:
                                 continue
                 except Exception:
@@ -110,8 +237,7 @@ def find_system_python() -> str | None:
         r"C:\Miniconda3\python.exe",
     ])
     for p in common_paths:
-        if os.path.isfile(p) and p not in candidates:
-            candidates.append(p)
+        _add_file_candidate(candidates, p)
 
     # PATH 目录扫描
     for dir_path in os.environ.get("PATH", "").split(os.pathsep):
@@ -119,51 +245,105 @@ def find_system_python() -> str | None:
         if not dir_path:
             continue
         exe = os.path.join(dir_path, "python.exe")
-        if os.path.isfile(exe) and exe not in candidates:
-            candidates.append(exe)
+        _add_file_candidate(candidates, exe)
 
     return candidates[0] if candidates else None
+
+
+def _open_idle_app(idle_app: str, abs_path: str) -> bool:
+    try:
+        subprocess.Popen(["open", "-a", idle_app, abs_path])
+        return True
+    except Exception:
+        return False
+
+
+def _open_with_python_idle(python_exe: str, abs_path: str) -> bool:
+    try:
+        subprocess.Popen(
+            [python_exe, "-m", "idlelib", abs_path],
+            **_subprocess_kwargs(),
+        )
+        return True
+    except Exception:
+        return False
+
+
+def _find_macos_idle_app() -> str | None:
+    if sys.platform != "darwin":
+        return None
+
+    candidates: list[str] = []
+    for apps_dir in ["/Applications", os.path.join(os.path.expanduser("~"), "Applications")]:
+        if not os.path.isdir(apps_dir):
+            continue
+        for name in os.listdir(apps_dir):
+            path = os.path.join(apps_dir, name)
+            if name.startswith("Python ") and os.path.isdir(path):
+                idle_app = _idle_app_in_dir(path)
+                if idle_app:
+                    candidates.append(idle_app)
+        direct_idle = os.path.join(apps_dir, "IDLE.app")
+        if _is_idle_app(direct_idle):
+            candidates.append(direct_idle)
+
+    candidates.sort(
+        key=lambda p: _version_key(os.path.basename(os.path.dirname(p)).replace("Python ", "")),
+        reverse=True,
+    )
+    return candidates[0] if candidates else None
+
+
+def open_with_default_app(path: str) -> bool:
+    """使用系统默认程序打开文件或文件夹."""
+    abs_path = os.path.abspath(path)
+    try:
+        if os.name == "nt":
+            os.startfile(abs_path)
+        elif sys.platform == "darwin":
+            subprocess.run(["open", abs_path], check=True)
+        else:
+            subprocess.run(["xdg-open", abs_path], check=True)
+        return True
+    except Exception:
+        return False
 
 
 def open_with_idle(file_path: str, python_exe: str | None = None) -> bool:
     """尝试用 IDLE 打开文件，返回是否成功."""
     abs_path = os.path.abspath(file_path)
-    NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
     # 用户指定的 Python
-    if python_exe and os.path.isfile(python_exe):
-        try:
-            subprocess.Popen(
-                [python_exe, "-m", "idlelib", abs_path],
-                creationflags=NO_WINDOW,
-            )
+    selected = normalize_python_selection(python_exe)
+    if selected:
+        if _is_idle_app(selected):
+            if _open_idle_app(selected, abs_path):
+                return True
+        elif _open_with_python_idle(selected, abs_path):
             return True
-        except Exception:
-            pass
+
+    # macOS Python.org 安装包自带 IDLE.app，优先用它打开。
+    idle_app = _find_macos_idle_app()
+    if idle_app and _open_idle_app(idle_app, abs_path):
+        return True
 
     # 当前 Python
     if not hasattr(sys, "_MEIPASS"):
-        try:
-            subprocess.Popen(
-                [sys.executable, "-m", "idlelib", abs_path],
-                creationflags=NO_WINDOW,
-            )
+        if _open_with_python_idle(sys.executable, abs_path):
             return True
-        except Exception:
-            pass
 
     # py -3
     try:
-        if shutil.which("py"):
+        if sys.platform == "win32" and shutil.which("py"):
             check = subprocess.run(
                 ["py", "-3", "--version"],
                 capture_output=True, text=True, timeout=5,
-                creationflags=NO_WINDOW,
+                **_subprocess_kwargs(),
             )
             if check.returncode == 0 and "Python" in (check.stdout + check.stderr):
                 subprocess.Popen(
                     ["py", "-3", "-m", "idlelib", abs_path],
-                    creationflags=NO_WINDOW,
+                    **_subprocess_kwargs(),
                 )
                 return True
     except Exception:
@@ -177,28 +357,19 @@ def open_with_idle(file_path: str, python_exe: str | None = None) -> bool:
                 check = subprocess.run(
                     [python_path, "--version"],
                     capture_output=True, text=True, timeout=5,
-                    creationflags=NO_WINDOW,
+                    **_subprocess_kwargs(),
                 )
                 if check.returncode == 0 and "Python" in (check.stdout + check.stderr):
-                    subprocess.Popen(
-                        [python_path, "-m", "idlelib", abs_path],
-                        creationflags=NO_WINDOW,
-                    )
-                    return True
+                    if _open_with_python_idle(python_path, abs_path):
+                        return True
             except Exception:
                 continue
 
     # 系统 Python
     python_exe = find_system_python()
     if python_exe:
-        try:
-            subprocess.Popen(
-                [python_exe, "-m", "idlelib", abs_path],
-                creationflags=NO_WINDOW,
-            )
+        if _open_with_python_idle(python_exe, abs_path):
             return True
-        except Exception:
-            pass
         # idle.pyw 回退
         python_dir = os.path.dirname(python_exe)
         idle_pyw = os.path.join(python_dir, "Lib", "idlelib", "idle.pyw")
@@ -206,7 +377,7 @@ def open_with_idle(file_path: str, python_exe: str | None = None) -> bool:
             try:
                 subprocess.Popen(
                     [python_exe, idle_pyw, abs_path],
-                    creationflags=NO_WINDOW,
+                    **_subprocess_kwargs(),
                 )
                 return True
             except Exception:
@@ -233,6 +404,16 @@ def find_vscode() -> str | None:
     code = shutil.which("code")
     if code:
         return code
+    if sys.platform == "darwin":
+        for app in [
+            "/Applications/Visual Studio Code.app",
+            os.path.join(os.path.expanduser("~"), "Applications", "Visual Studio Code.app"),
+        ]:
+            cli = os.path.join(app, "Contents", "Resources", "app", "bin", "code")
+            if os.path.isfile(cli):
+                return cli
+            if os.path.isdir(app):
+                return app
     # 常见安装路径
     local_app = os.environ.get("LOCALAPPDATA", "")
     program_files = os.environ.get("ProgramFiles", "C:\\Program Files")
@@ -255,13 +436,12 @@ def open_c_file(file_path: str) -> str | None:
         成功返回描述文字（用于提示框），失败返回 None.
     """
     abs_path = os.path.abspath(file_path)
-    NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
     # 1. Microsoft Visual C++ 2010 Express
     vc = find_vc_express()
     if vc:
         try:
-            subprocess.Popen([vc, abs_path], creationflags=NO_WINDOW)
+            subprocess.Popen([vc, abs_path], **_subprocess_kwargs())
             return "Microsoft Visual C++ 2010 Express"
         except Exception:
             pass
@@ -270,17 +450,15 @@ def open_c_file(file_path: str) -> str | None:
     vscode = find_vscode()
     if vscode:
         try:
-            subprocess.Popen([vscode, abs_path], creationflags=NO_WINDOW)
+            if sys.platform == "darwin" and vscode.endswith(".app"):
+                subprocess.Popen(["open", "-a", vscode, abs_path])
+            else:
+                subprocess.Popen([vscode, abs_path], **_subprocess_kwargs())
             return "Visual Studio Code"
         except Exception:
             pass
 
     # 3. 系统默认
-    try:
-        if os.name == "nt":
-            os.startfile(abs_path)
-        else:
-            subprocess.run(["xdg-open", abs_path], check=True)
+    if open_with_default_app(abs_path):
         return "系统默认程序"
-    except Exception:
-        return None
+    return None

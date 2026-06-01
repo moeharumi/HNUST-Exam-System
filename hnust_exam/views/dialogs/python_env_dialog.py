@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import sys
 import webbrowser
 
 from PySide6.QtCore import Qt
@@ -16,7 +17,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
 )
 
-from hnust_exam.services.python_env import find_system_python
+from hnust_exam.services.python_env import find_system_python, normalize_python_selection
 from hnust_exam.utils.theme import Theme
 from hnust_exam.utils.ui_helpers import themed_info, themed_warning
 
@@ -71,7 +72,8 @@ class PythonEnvDialog(QDialog):
         body_layout.addWidget(auto_btn)
 
         # 手动选择
-        manual_btn = QPushButton("手动选择 python.exe")
+        manual_text = "手动选择 Python / IDLE.app" if sys.platform == "darwin" else "手动选择 Python"
+        manual_btn = QPushButton(manual_text)
         manual_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         manual_btn.setStyleSheet(
             f"background-color: {c['SURFACE']}; color: {c['TEXT']}; font-size: 11pt; "
@@ -113,24 +115,71 @@ class PythonEnvDialog(QDialog):
             themed_warning(self, "未找到", "自动搜索未找到 Python。\n请手动选择或安装。")
 
     def _manual_select(self) -> None:
-        initial_dir = os.environ.get("ProgramFiles", "C:\\")
-        local_app = os.environ.get("LOCALAPPDATA", "")
-        python_dir = os.path.join(local_app, "Programs", "Python")
-        if os.path.isdir(python_dir):
-            initial_dir = python_dir
+        initial_dir, title, name_filter = self._manual_dialog_options()
 
         path, _ = QFileDialog.getOpenFileName(
-            self, "选择 python.exe", initial_dir,
-            "python.exe (python.exe);;所有文件 (*)"
+            self, title, initial_dir, name_filter
         )
-        if path and os.path.isfile(path):
-            self.python_path = path
+        selected = normalize_python_selection(path)
+        if selected:
+            self.python_path = selected
             self.accept()
+        elif path:
+            themed_warning(
+                self,
+                "无法使用",
+                "请选择 Python 解释器，或选择 Python 安装目录中的 IDLE.app。",
+            )
+
+    def _manual_dialog_options(self) -> tuple[str, str, str]:
+        if sys.platform == "darwin":
+            initial_dir = self._mac_python_initial_dir()
+            return (
+                initial_dir,
+                "选择 Python 或 IDLE.app",
+                "Python / IDLE (python python3 pythonw python* *.app);;所有文件 (*)",
+            )
+
+        if os.name == "nt":
+            initial_dir = os.environ.get("ProgramFiles", "C:\\")
+            local_app = os.environ.get("LOCALAPPDATA", "")
+            python_dir = os.path.join(local_app, "Programs", "Python")
+            if os.path.isdir(python_dir):
+                initial_dir = python_dir
+            return initial_dir, "选择 python.exe", "python.exe (python.exe);;所有文件 (*)"
+
+        return "/", "选择 Python", "Python (python python3 python*);;所有文件 (*)"
+
+    def _mac_python_initial_dir(self) -> str:
+        apps_dir = "/Applications"
+        if not os.path.isdir(apps_dir):
+            return os.path.expanduser("~")
+
+        python_dirs: list[str] = []
+        for name in os.listdir(apps_dir):
+            path = os.path.join(apps_dir, name)
+            if name.startswith("Python ") and os.path.isdir(path):
+                python_dirs.append(path)
+
+        def version_key(path: str) -> tuple[int, ...]:
+            version = os.path.basename(path).replace("Python ", "")
+            parts: list[int] = []
+            for part in version.split("."):
+                try:
+                    parts.append(int(part))
+                except ValueError:
+                    parts.append(-1)
+            return tuple(parts)
+
+        python_dirs.sort(key=version_key, reverse=True)
+        return python_dirs[0] if python_dirs else apps_dir
 
     def _download_python(self) -> None:
         webbrowser.open("https://www.python.org/downloads/")
+        msg = "下载安装后请重新打开本程序。"
+        if sys.platform == "win32":
+            msg += "\n安装时务必勾选 \"Add Python to PATH\"！"
         themed_info(
             self, "提示",
-            "下载安装后请重新打开本程序。\n"
-            "安装时务必勾选 \"Add Python to PATH\"！"
+            msg
         )
